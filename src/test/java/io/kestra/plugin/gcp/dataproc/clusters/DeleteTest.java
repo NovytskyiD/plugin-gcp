@@ -1,6 +1,6 @@
 package io.kestra.plugin.gcp.dataproc.clusters;
 
-import autovalue.shaded.com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableMap;
 import io.kestra.core.junit.annotations.KestraTest;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.runners.RunContext;
@@ -8,16 +8,15 @@ import io.kestra.core.runners.RunContextFactory;
 import io.kestra.core.utils.TestsUtils;
 import io.micronaut.context.annotation.Value;
 import jakarta.inject.Inject;
-import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
-import static org.hamcrest.Matchers.notNullValue;
 
 @KestraTest
-@Slf4j
+@EnabledIfEnvironmentVariable(named = "GOOGLE_APPLICATION_CREDENTIALS", matches = ".+")
 @Disabled
 public class DeleteTest {
 
@@ -35,7 +34,7 @@ public class DeleteTest {
         Delete create = Delete.builder()
             .id(Delete.class.getSimpleName())
             .type(Delete.class.getName())
-            .projectId(Property.of(project))
+            .projectId(Property.ofValue(project))
             .clusterName("test-cluster")
 	        .region(region)
             .build();

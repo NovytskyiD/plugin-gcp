@@ -29,7 +29,8 @@ import static io.kestra.core.utils.Rethrow.throwFunction;
 @Getter
 @NoArgsConstructor
 @Schema(
-    title = "Copy BigQuery partitions between intervals to another table."
+    title = "Copy BigQuery partitions to another table",
+    description = "Lists partitions in a source table over the given date range and copies them to a destination table using a BigQuery copy job. Supports create/write dispositions and dry run."
 )
 @Plugin(
     examples = {
@@ -57,18 +58,41 @@ import static io.kestra.core.utils.Rethrow.throwFunction;
     }
 )
 public class CopyPartitions extends AbstractPartition implements RunnableTask<CopyPartitions.Output>, AbstractJobInterface {
+    @Schema(
+        title = "Destination table",
+        description = "Target table receiving the copied partitions"
+    )
     protected Property<String> destinationTable;
 
+    @Schema(
+        title = "Write disposition",
+        description = "BigQuery write disposition applied to the copy job"
+    )
     protected Property<JobInfo.WriteDisposition> writeDisposition;
 
+    @Schema(
+        title = "Create disposition",
+        description = "BigQuery create disposition applied to the copy job"
+    )
     protected Property<JobInfo.CreateDisposition> createDisposition;
 
+    @Schema(
+        title = "Job timeout",
+        description = "Optional maximum duration for the copy job"
+    )
     protected Property<Duration> jobTimeout;
 
+    @Schema(
+        title = "Job labels"
+    )
     protected Property<Map<String, String>> labels;
 
     @Builder.Default
-    protected Property<Boolean> dryRun = Property.of(false);
+    @Schema(
+        title = "Dry run",
+        description = "If true, validates the job without executing"
+    )
+    protected Property<Boolean> dryRun = Property.ofValue(false);
 
     @Override
     public CopyPartitions.Output run(RunContext runContext) throws Exception {
@@ -83,7 +107,7 @@ public class CopyPartitions extends AbstractPartition implements RunnableTask<Co
         runContext.metric(Counter.of("size", partitionToCopy.size()));
 
         Copy task = Copy.builder()
-            .sourceTables(Property.of(partitionToCopy
+            .sourceTables(Property.ofValue(partitionToCopy
                 .stream()
                 .map(throwFunction(s -> {
                     TableId current = this.tableId(runContext, s);
@@ -123,17 +147,17 @@ public class CopyPartitions extends AbstractPartition implements RunnableTask<Co
     @Builder
     public static class Output implements io.kestra.core.models.tasks.Output {
         @Schema(
-            title = "The project's id"
+            title = "Project ID"
         )
         private final String projectId;
 
         @Schema(
-            title = "The dataset's id"
+            title = "Dataset ID"
         )
         private final String datasetId;
 
         @Schema(
-            title = "The table name"
+            title = "Table name"
         )
         private final String table;
 
@@ -143,7 +167,7 @@ public class CopyPartitions extends AbstractPartition implements RunnableTask<Co
         private final List<String> partitions;
 
         @Schema(
-            title = "The job id"
+            title = "Job ID"
         )
         private String jobId;
 

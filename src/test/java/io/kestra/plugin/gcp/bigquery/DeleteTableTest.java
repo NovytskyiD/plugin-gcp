@@ -14,11 +14,13 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import jakarta.inject.Inject;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 
 @KestraTest
+@EnabledIfEnvironmentVariable(named = "GOOGLE_APPLICATION_CREDENTIALS", matches = ".+")
 class DeleteTableTest {
     @Inject
     private RunContextFactory runContextFactory;
@@ -39,7 +41,8 @@ class DeleteTableTest {
         Query create = Query.builder()
             .id(QueryTest.class.getSimpleName())
             .type(Query.class.getName())
-            .sql(Property.of("CREATE TABLE `" + project + "." + dataset + "." + table + "` (transaction_id INT64, transaction_date DATETIME)\n" +
+            .projectId(Property.ofValue(project))
+            .sql(Property.ofValue("CREATE TABLE `" + project + "." + dataset + "." + table + "` (transaction_id INT64, transaction_date DATETIME)\n" +
                 "PARTITION BY DATE(transaction_date)\n" +
                 "AS (SELECT 1, DATETIME '" + today.format(DateTimeFormatter.ISO_LOCAL_DATE) + " 12:30:00.45')\n" +
                 "UNION ALL\n" +
@@ -52,9 +55,9 @@ class DeleteTableTest {
         DeleteTable task = DeleteTable.builder()
             .id(QueryTest.class.getSimpleName())
             .type(DeleteTable.class.getName())
-            .projectId(Property.of(this.project))
-            .dataset(Property.of(this.dataset))
-            .table(Property.of(table + "$" + partition))
+            .projectId(Property.ofValue(this.project))
+            .dataset(Property.ofValue(this.dataset))
+            .table(Property.ofValue(table + "$" + partition))
             .build();
         runContext = TestsUtils.mockRunContext(runContextFactory, task, ImmutableMap.of());
         DeleteTable.Output run = task.run(runContext);
@@ -64,8 +67,9 @@ class DeleteTableTest {
         Query query = Query.builder()
             .id(QueryTest.class.getSimpleName())
             .type(Query.class.getName())
+            .projectId(Property.ofValue(project))
             .fetchOne(true)
-            .sql(Property.of("SELECT COUNT(*) as cnt FROM `" + project + "." + dataset + "." + table + "`;"))
+            .sql(Property.ofValue("SELECT COUNT(*) as cnt FROM `" + project + "." + dataset + "." + table + "`;"))
             .build();
         runContext = TestsUtils.mockRunContext(runContextFactory, query, ImmutableMap.of());
         Query.Output queryRun = query.run(runContext);

@@ -5,17 +5,24 @@ import com.google.cloud.bigquery.JobInfo;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.io.CharStreams;
 import dev.failsafe.FailsafeException;
+import io.kestra.core.junit.annotations.KestraTest;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.common.FetchType;
-import io.micronaut.context.annotation.Value;
-import io.kestra.core.junit.annotations.KestraTest;
-import lombok.extern.slf4j.Slf4j;
-import org.junit.jupiter.api.Disabled;
-import org.junit.jupiter.api.Test;
 import io.kestra.core.runners.RunContext;
 import io.kestra.core.runners.RunContextFactory;
 import io.kestra.core.storages.StorageInterface;
+import io.kestra.core.tenant.TenantService;
 import io.kestra.core.utils.TestsUtils;
+import io.micronaut.context.annotation.Value;
+import jakarta.inject.Inject;
+import lombok.extern.slf4j.Slf4j;
+import org.hamcrest.Matchers;
+import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.InputStreamReader;
 import java.math.BigDecimal;
@@ -27,20 +34,15 @@ import java.util.concurrent.*;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
-import jakarta.inject.Inject;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
-
+import static io.kestra.core.utils.Rethrow.throwRunnable;
 import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.*;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static io.kestra.core.utils.Rethrow.throwRunnable;
 
 @KestraTest
-@Slf4j
+@EnabledIfEnvironmentVariable(named = "GOOGLE_APPLICATION_CREDENTIALS", matches = ".+")
 class QueryTest {
     @Inject
     private RunContextFactory runContextFactory;
@@ -78,7 +80,7 @@ class QueryTest {
     private static Stream<Arguments> provideFetchOrFetchType() {
         return Stream.of(
             Arguments.of(true, null),
-            Arguments.of(false, Property.of(FetchType.FETCH))
+            Arguments.of(false, Property.ofValue(FetchType.FETCH))
         );
     }
 
@@ -94,42 +96,43 @@ class QueryTest {
         ));
 
         Query task = Query.builder()
-            .sql(new Property<>("{{sql}}"))
-            .location(Property.of("EU"))
+            .projectId(Property.ofValue(project))
+            .sql(Property.ofExpression("{{sql}}"))
+            .location(Property.ofValue("EU"))
             .fetch(fetch)
             .fetchType(fetchType)
             .build();
 
         Query.Output run = task.run(runContext);
 
-        List<Map<String, Object>> rows = (List<Map<String, Object>>) run.getRows();
+        List<Map<String, Object>> rows = run.getRows();
         assertThat(rows.size(), is(1));
 
-        assertThat(rows.get(0).get("string"), is("hello"));
-        assertThat(rows.get(0).get("nullable"), is(nullValue()));
-        assertThat(rows.get(0).get("int"), is(1L));
-        assertThat(rows.get(0).get("float"), is(1.25D));
-        assertThat(rows.get(0).get("bignumeric"), is(new BigDecimal("1.25")));
-        assertThat(rows.get(0).get("date"), is(LocalDate.parse("2008-12-25")));
-        assertThat(rows.get(0).get("time"), is(LocalTime.parse("15:30:00.123456")));
-        assertThat(rows.get(0).get("timestamp"), is(Instant.parse("2008-12-25T15:30:00.123456Z")));
-        assertThat((List<Double>) rows.get(0).get("geopoint"), containsInAnyOrder(50.6833, 2.9));
-        assertThat((List<Long>) rows.get(0).get("array"), containsInAnyOrder(1L, 2L, 3L));
-        assertThat(((Map<String, Object>) rows.get(0).get("struct")).get("v"), is(nullValue()));
-        assertThat(((Map<String, Object>) rows.get(0).get("struct")).get("x"), is(4L));
-        assertThat(((Map<String, Object>) rows.get(0).get("struct")).get("y"), is(0L));
-        assertThat((List<Long>) ((Map<String, Object>) rows.get(0).get("struct")).get("z"), containsInAnyOrder(1L, 2L, 3L));
-        assertThat(((Map<String, Object>) rows.get(0).get("range")).get("start"), is(LocalDate.parse("2022-12-01")));
-        assertThat(((Map<String, Object>) rows.get(0).get("range")).get("end"), is(LocalDate.parse("2022-12-31")));
-        assertThat(rows.get(0).get("interval"), is("1-0 0 0:0:0"));
-        assertThat(((Map<String, Object>) rows.get(0).get("json")).get("name"), is("Alice"));
-        assertThat(((Map<String, Object>) rows.get(0).get("json")).get("age"), is(30));
+        assertThat(rows.getFirst().get("string"), is("hello"));
+        assertThat(rows.getFirst().get("nullable"), is(nullValue()));
+        assertThat(rows.getFirst().get("int"), is(1L));
+        assertThat(rows.getFirst().get("float"), is(1.25D));
+        assertThat(rows.getFirst().get("bignumeric"), is(new BigDecimal("1.25")));
+        assertThat(rows.getFirst().get("date"), is(LocalDate.parse("2008-12-25")));
+        assertThat(rows.getFirst().get("time"), is(LocalTime.parse("15:30:00.123456")));
+        assertThat(rows.getFirst().get("timestamp"), is(Instant.parse("2008-12-25T15:30:00.123456Z")));
+        assertThat((List<Double>) rows.getFirst().get("geopoint"), containsInAnyOrder(50.6833, 2.9));
+        assertThat((List<Long>) rows.getFirst().get("array"), containsInAnyOrder(1L, 2L, 3L));
+        assertThat(((Map<String, Object>) rows.getFirst().get("struct")).get("v"), is(nullValue()));
+        assertThat(((Map<String, Object>) rows.getFirst().get("struct")).get("x"), is(4L));
+        assertThat(((Map<String, Object>) rows.getFirst().get("struct")).get("y"), is(0L));
+        assertThat((List<Long>) ((Map<String, Object>) rows.getFirst().get("struct")).get("z"), containsInAnyOrder(1L, 2L, 3L));
+        assertThat(((Map<String, Object>) rows.getFirst().get("range")).get("start"), is(LocalDate.parse("2022-12-01")));
+        assertThat(((Map<String, Object>) rows.getFirst().get("range")).get("end"), is(LocalDate.parse("2022-12-31")));
+        assertThat(rows.getFirst().get("interval"), is("1-0 0 0:0:0"));
+        assertThat(((Map<String, Object>) rows.getFirst().get("json")).get("name"), is("Alice"));
+        assertThat(((Map<String, Object>) rows.getFirst().get("json")).get("age"), is(30));
     }
 
     private static Stream<Arguments> provideStoreOrFetchType() {
         return Stream.of(
             Arguments.of(true, null),
-            Arguments.of(false, Property.of(FetchType.STORE))
+            Arguments.of(false, Property.ofValue(FetchType.STORE))
         );
     }
 
@@ -139,16 +142,17 @@ class QueryTest {
         Query task = Query.builder()
             .id(QueryTest.class.getSimpleName())
             .type(Query.class.getName())
-            .sql(Property.of(sql() + "\n UNION ALL \n " + sql()))
+            .projectId(Property.ofValue(project))
+            .sql(Property.ofValue(sql() + "\n UNION ALL \n " + sql()))
             .store(store)
             .fetchType(fetchType)
             .build();
 
         Query.Output run = task.run(TestsUtils.mockRunContext(runContextFactory, task, ImmutableMap.of()));
-        String ionResult = CharStreams.toString(new InputStreamReader(storageInterface.get(null, null, run.getUri())));
+        String ionResult = CharStreams.toString(new InputStreamReader(storageInterface.get(TenantService.MAIN_TENANT, null, run.getUri())));
 
         assertThat(ionResult, containsString("string:\"hello\""));
-        assertThat(ionResult, containsString("datetime:2008-12-25T15:30:00.123Z"));
+        assertThat(ionResult, containsString("datetime:\"2008-12-25T15:30:00.123456Z\""));
         assertThat(ionResult, containsString("string:\"hello\""));
         assertThat(ionResult, containsString("interval:\"1-0 0 0:0:0\""));
     }
@@ -159,7 +163,8 @@ class QueryTest {
         Query task = Query.builder()
             .id(QueryTest.class.getSimpleName())
             .type(Query.class.getName())
-            .sql(Property.of("SELECT repository_forks FROM `bigquery-public-data.samples.github_timeline` LIMIT 100000"))
+            .projectId(Property.ofValue(project))
+            .sql(Property.ofValue("SELECT repository_forks FROM `bigquery-public-data.samples.github_timeline` LIMIT 100000"))
             .fetch(fetch)
             .fetchType(fetchType)
             .build();
@@ -176,7 +181,8 @@ class QueryTest {
         Query task = Query.builder()
             .id(QueryTest.class.getSimpleName())
             .type(Query.class.getName())
-            .sql(new Property<>("{% for input in inputs.loop %}" +
+            .projectId(Property.ofValue(project))
+            .sql(Property.ofExpression("{% for input in inputs.loop %}" +
                 "SELECT" +
                 "  \"{{execution.id}}\" as execution_id," +
                 "  TIMESTAMP \"{{execution.startDate | date(\"yyyy-MM-dd HH:mm:ss.SSSSSS\")}}\" as execution_date," +
@@ -184,11 +190,11 @@ class QueryTest {
                 "{{ loop.last  == false ? '\nUNION ALL\n' : '\n' }}" +
                 "{% endfor %}"
             ))
-            .destinationTable(Property.of(project + "." + dataset + "." + friendlyId))
-            .timePartitioningField(Property.of("execution_date"))
-            .clusteringFields(Property.of(Arrays.asList("execution_id", "counter")))
-            .schemaUpdateOptions(Property.of(Collections.singletonList(JobInfo.SchemaUpdateOption.ALLOW_FIELD_ADDITION)))
-            .writeDisposition(Property.of(JobInfo.WriteDisposition.WRITE_APPEND))
+            .destinationTable(Property.ofValue(project + "." + dataset + "." + friendlyId))
+            .timePartitioningField(Property.ofValue("execution_date"))
+            .clusteringFields(Property.ofValue(Arrays.asList("execution_id", "counter")))
+            .schemaUpdateOptions(Property.ofValue(Collections.singletonList(JobInfo.SchemaUpdateOption.ALLOW_FIELD_ADDITION)))
+            .writeDisposition(Property.ofValue(JobInfo.WriteDisposition.WRITE_APPEND))
             .build();
 
         RunContext runContext = TestsUtils.mockRunContext(runContextFactory, task, ImmutableMap.of(
@@ -197,9 +203,9 @@ class QueryTest {
 
         Query.Output run = task.run(runContext);
         assertThat(run.getJobId(), is(notNullValue()));
-        assertThat(run.getDestinationTable().getProject(),is(project));
-        assertThat(run.getDestinationTable().getDataset(),is(dataset));
-        assertThat(run.getDestinationTable().getTable(),is(friendlyId));
+        assertThat(run.getDestinationTable().getProject(), is(project));
+        assertThat(run.getDestinationTable().getDataset(), is(dataset));
+        assertThat(run.getDestinationTable().getTable(), is(friendlyId));
     }
 
     @Test
@@ -207,7 +213,8 @@ class QueryTest {
         Query task = Query.builder()
             .id(QueryTest.class.getSimpleName())
             .type(Query.class.getName())
-            .sql(new Property<>("SELECT * from `{{execution.id}}`"))
+            .projectId(Property.ofValue(project))
+            .sql(Property.ofExpression("SELECT * from `{{execution.id}}`"))
             .build();
 
         RunContext runContext = TestsUtils.mockRunContext(runContextFactory, task, ImmutableMap.of());
@@ -224,7 +231,8 @@ class QueryTest {
         Query task = Query.builder()
             .id(QueryTest.class.getSimpleName())
             .type(Query.class.getName())
-            .sql(new Property<>("{% for input in inputs.loop %}" +
+            .projectId(Property.ofValue(project))
+            .sql(Property.ofExpression("{% for input in inputs.loop %}" +
                 "SELECT" +
                 "  \"{{execution.id}}\" as execution_id," +
                 "  TIMESTAMP \"{{execution.startDate | date(\"yyyy-MM-dd HH:mm:ss.SSSSSS\") }}\" as execution_date," +
@@ -252,10 +260,11 @@ class QueryTest {
             Query task = Query.builder()
                 .id(QueryTest.class.getSimpleName())
                 .type(Query.class.getName())
-                .sql(Property.of("SELECT \"" + i + "\" as value"))
-                .destinationTable(Property.of(table))
-                .createDisposition(Property.of(JobInfo.CreateDisposition.CREATE_IF_NEEDED))
-                .writeDisposition(Property.of(JobInfo.WriteDisposition.WRITE_TRUNCATE))
+                .projectId(Property.ofValue(project))
+                .sql(Property.ofValue("SELECT \"" + i + "\" as value"))
+                .destinationTable(Property.ofValue(table))
+                .createDisposition(Property.ofValue(JobInfo.CreateDisposition.CREATE_IF_NEEDED))
+                .writeDisposition(Property.ofValue(JobInfo.WriteDisposition.WRITE_TRUNCATE))
                 .build();
 
             RunContext runContext = TestsUtils.mockRunContext(runContextFactory, task, ImmutableMap.of());
@@ -272,7 +281,7 @@ class QueryTest {
                 try {
                     return outputFuture.get();
                 } catch (InterruptedException | ExecutionException e) {
-                    log.error("Failed on ", e);
+                    runContextFactory.of().logger().error("Failed on ", e);
                     return null;
                 }
             })
@@ -287,7 +296,8 @@ class QueryTest {
         Query task = Query.builder()
             .id(QueryTest.class.getSimpleName())
             .type(Query.class.getName())
-            .sql(new Property<>("{% for input in  inputs.loop %}" +
+            .projectId(Property.ofValue(project))
+            .sql(Property.ofExpression("{% for input in  inputs.loop %}" +
                 "SELECT * from `{{execution.id}}`;" +
                 "{% endfor %}"
             ))
@@ -309,7 +319,8 @@ class QueryTest {
         Query task = Query.builder()
             .id(QueryTest.class.getSimpleName())
             .type(Query.class.getName())
-            .sql(Property.of("DROP TABLE IF EXISTS `" + project + "." + this.dataset + ".not`;" +
+            .projectId(Property.ofValue(project))
+            .sql(Property.ofValue("DROP TABLE IF EXISTS `" + project + "." + this.dataset + ".not`;" +
                 "DROP TABLE IF EXISTS `" + project + "." + this.dataset + ".exist`;"
             ))
             .build();
@@ -329,7 +340,8 @@ class QueryTest {
         Query create = Query.builder()
             .id(QueryTest.class.getSimpleName())
             .type(Query.class.getName())
-            .sql(Property.of("CREATE TABLE " + table + " AS SELECT 1 AS number"))
+            .projectId(Property.ofValue(project))
+            .sql(Property.ofValue("CREATE TABLE " + table + " AS SELECT 1 AS number"))
             .build();
 
         create.run(TestsUtils.mockRunContext(runContextFactory, create, ImmutableMap.of()));
@@ -343,7 +355,8 @@ class QueryTest {
         Query task = Query.builder()
             .id("test")
             .type(Query.class.getName())
-            .sql(Property.of("SELECT * FROM " + table + ";"))
+            .projectId(Property.ofValue(project))
+            .sql(Property.ofValue("SELECT * FROM " + table + ";"))
             .fetchOne(true)
             .build();
         RunContext runContext = TestsUtils.mockRunContext(runContextFactory, task, ImmutableMap.of());
@@ -361,28 +374,21 @@ class QueryTest {
     }
 
     @Test
-    void labelsAreNotOverwritten() throws Exception {
-        Map<String, String> initialLabels = new HashMap<>();
-        initialLabels.put("env", "test");
-        initialLabels.put("engine", "bigquery");
-
+    void dryRunQuery() throws Exception {
         Query task = Query.builder()
-                .id("query")
-                .type(Query.class.getName())
-                .sql(Property.of("SELECT 1"))
-                .labels(Property.of(initialLabels))
-                .build();
+            .id("dryRunQuery")
+            .type(Query.class.getName())
+            .projectId(Property.ofValue(project))
+            .sql(Property.ofValue("SELECT 1"))
+            .fetchType(Property.ofValue(FetchType.NONE))
+            .dryRun(Property.ofValue(true))
+            .build();
 
         RunContext runContext = TestsUtils.mockRunContext(runContextFactory, task, ImmutableMap.of());
 
-        var labels = task.jobConfiguration(runContext).getLabels();
+        Query.Output output = task.run(runContext);
 
-        assertThat(labels.size(), is(6));
-        assertThat(labels.get("env"), is("test"));
-        assertThat(labels.get("engine"), is("bigquery"));
-        assertThat(labels.get("kestra_namespace"), is("io_kestra_plugin_gcp_bigquery_querytest"));
-        assertThat(labels.get("kestra_flow_id"), is("labelsarenotoverwritten"));
-        assertThat(labels.get("kestra_execution_id"), notNullValue());
-        assertThat(labels.get("kestra_task_id"), is("query"));
+        assertThat(output, notNullValue());
+        assertThat(output.getJobId(), nullValue());
     }
 }

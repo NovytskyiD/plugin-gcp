@@ -3,6 +3,7 @@ package io.kestra.plugin.gcp.gcs;
 import com.devskiller.friendly_id.FriendlyId;
 import com.google.common.collect.ImmutableMap;
 import io.kestra.core.models.property.Property;
+import io.kestra.core.tenant.TenantService;
 import io.micronaut.context.annotation.Value;
 import io.kestra.core.junit.annotations.KestraTest;
 import org.junit.jupiter.api.Test;
@@ -17,11 +18,13 @@ import java.io.FileInputStream;
 import java.net.URI;
 import java.util.Objects;
 import jakarta.inject.Inject;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 
 @KestraTest
+@EnabledIfEnvironmentVariable(named = "GOOGLE_APPLICATION_CREDENTIALS", matches = ".+")
 class DeleteTest {
     @Inject
     private StorageInterface storageInterface;
@@ -39,7 +42,7 @@ class DeleteTest {
             .toURI());
 
         URI source = storageInterface.put(
-            null,
+            TenantService.MAIN_TENANT,
             null,
             new URI("/" + FriendlyId.createFriendlyId()),
             new FileInputStream(file)
@@ -50,8 +53,8 @@ class DeleteTest {
         Upload upload = Upload.builder()
             .id(UploadTest.class.getSimpleName())
             .type(Upload.class.getName())
-            .from(Property.of(source.toString()))
-            .to(Property.of("gs://{{inputs.bucket}}/tasks/gcp/upload/" + out + ".yml"))
+            .from(Property.ofValue(source.toString()))
+            .to(Property.ofValue("gs://{{inputs.bucket}}/tasks/gcp/upload/" + out + ".yml"))
             .build();
 
         Upload.Output uploadOutput = upload.run(runContext(upload));
@@ -59,7 +62,7 @@ class DeleteTest {
         Delete task = Delete.builder()
             .id(DeleteTest.class.getSimpleName())
             .type(Download.class.getName())
-            .uri(Property.of(uploadOutput.getUri().toString()))
+            .uri(Property.ofValue(uploadOutput.getUri().toString()))
             .build();
 
 

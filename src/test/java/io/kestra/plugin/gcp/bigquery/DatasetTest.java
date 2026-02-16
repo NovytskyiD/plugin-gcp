@@ -19,6 +19,8 @@ import io.kestra.core.runners.RunContext;
 import io.kestra.core.runners.RunContextFactory;
 
 import jakarta.inject.Inject;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+
 import java.util.Collections;
 
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -26,6 +28,7 @@ import static org.hamcrest.Matchers.*;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @KestraTest
+@EnabledIfEnvironmentVariable(named = "GOOGLE_APPLICATION_CREDENTIALS", matches = ".+")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class DatasetTest {
     private static final String RANDOM_ID = "tu_" + FriendlyId.createFriendlyId().toLowerCase();
@@ -52,8 +55,8 @@ class DatasetTest {
         return CreateDataset.builder()
             .id(DatasetTest.class.getSimpleName())
             .type(CreateDataset.class.getName())
-            .name(new Property<>("{{dataset}}"))
-            .projectId(new Property<>("{{project}}"));
+            .name(Property.ofExpression("{{dataset}}"))
+            .projectId(Property.ofExpression("{{project}}"));
     }
 
     @Test
@@ -80,7 +83,7 @@ class DatasetTest {
     void createNoException() throws Exception {
         CreateDataset task = createBuilder()
             .description("createUpdate")
-            .ifExists(Property.of(CreateDataset.IfExists.SKIP))
+            .ifExists(Property.ofValue(CreateDataset.IfExists.SKIP))
             .build();
 
         AbstractDataset.Output run = task.run(runContext());
@@ -93,7 +96,7 @@ class DatasetTest {
     void createUpdate() throws Exception {
         CreateDataset task = createBuilder()
             .description("createUpdate")
-            .ifExists(Property.of(CreateDataset.IfExists.UPDATE))
+            .ifExists(Property.ofValue(CreateDataset.IfExists.UPDATE))
             .build();
 
         AbstractDataset.Output run = task.run(runContext());
@@ -108,8 +111,8 @@ class DatasetTest {
         UpdateDataset task = UpdateDataset.builder()
             .id(UpdateDataset.class.getSimpleName())
             .type(CreateDataset.class.getName())
-            .name(new Property<>("{{dataset}}"))
-            .projectId(new Property<>("{{project}}"))
+            .name(Property.ofExpression("{{dataset}}"))
+            .projectId(Property.ofExpression("{{project}}"))
             .description("update")
             .build();
 
@@ -125,13 +128,13 @@ class DatasetTest {
 
         CreateDataset task = createBuilder()
             .description(RANDOM_ID_2)
-            .ifExists(Property.of(CreateDataset.IfExists.UPDATE))
+            .ifExists(Property.ofValue(CreateDataset.IfExists.UPDATE))
             .acl(Collections.singletonList(
                 AccessControl.builder()
                     .entity(Entity.builder()
-                        .type(Property.of(Entity.Type.USER))
-                        .value(Property.of("kestra-unit-test@kestra-unit-test.iam.gserviceaccount.com")).build())
-                    .role(Property.of(AccessControl.Role.OWNER))
+                        .type(Property.ofValue(Entity.Type.USER))
+                        .value(Property.ofValue("kestra-unit-test@kestra-unit-test.iam.gserviceaccount.com")).build())
+                    .role(Property.ofValue(AccessControl.Role.OWNER))
                     .build()
             ))
             .build();
@@ -161,9 +164,9 @@ class DatasetTest {
         DeleteDataset task = DeleteDataset.builder()
             .id(DatasetTest.class.getSimpleName())
             .type(DeleteDataset.class.getName())
-            .name(new Property<>("{{dataset}}"))
-            .projectId(new Property<>("{{project}}"))
-            .deleteContents(Property.of(true))
+            .name(Property.ofExpression("{{dataset}}"))
+            .projectId(Property.ofExpression("{{project}}"))
+            .deleteContents(Property.ofValue(true))
             .build();
 
         DeleteDataset.Output run = task.run(runContext);
@@ -174,9 +177,9 @@ class DatasetTest {
         task = DeleteDataset.builder()
             .id(DatasetTest.class.getSimpleName())
             .type(DeleteDataset.class.getName())
-            .name(new Property<>("{{dataset}}"))
-            .projectId(new Property<>("{{project}}"))
-            .deleteContents(Property.of(true))
+            .name(Property.ofExpression("{{dataset}}"))
+            .projectId(Property.ofExpression("{{project}}"))
+            .deleteContents(Property.ofValue(true))
             .build();
 
         run = task.run(runContext);

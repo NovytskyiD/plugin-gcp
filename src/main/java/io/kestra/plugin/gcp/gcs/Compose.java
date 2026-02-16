@@ -4,6 +4,7 @@ import com.google.cloud.storage.BlobId;
 import com.google.cloud.storage.BlobInfo;
 import com.google.cloud.storage.Storage;
 import io.kestra.core.models.annotations.Example;
+import io.kestra.core.models.annotations.Metric;
 import io.kestra.core.models.annotations.Plugin;
 import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.executions.metrics.Counter;
@@ -27,7 +28,7 @@ import jakarta.validation.constraints.NotNull;
 @Plugin(
     examples = {
         @Example(
-            title = "Concat files in a bucket",
+            title = "Concatenate files in a bucket",
             full = true,
             code = """
                 id: gcp_gcs_compose
@@ -41,30 +42,59 @@ import jakarta.validation.constraints.NotNull;
                     to: "gs://my_bucket/destination/my-compose-file.txt"
                 """
         )
+    },
+    metrics = {
+        @Metric(
+            name = "count",
+            type = Counter.TYPE,
+            unit = "files",
+            description = "Number of files composed."
+        ),
+        @Metric(
+            name = "size",
+            type = Counter.TYPE,
+            unit = "bytes",
+            description = "Size of the composed file."
+        )
     }
 )
 @Schema(
-    title = "List files in a GCS bucket."
+    title = "Compose multiple GCS objects into one",
+    description = "Concatenates up to 32 source objects into a single destination object in GCS."
 )
 public class Compose extends AbstractGcs implements RunnableTask<Compose.Output> {
+    /**
+     * GCS Compose API limit.
+     *
+     * We do not use the List default (25) here because Compose only merges
+     * existing GCS objects and does not impact Kestra execution or storage.
+     * The only real limit is imposed by GCS itself: max 32 source objects.
+     *
+     * See: https://docs.cloud.google.com/storage/docs/json_api/v1/objects/compose
+     */
+    private static final int GCS_COMPOSE_MAX_SOURCE_OBJECTS = 32;
+
     @Schema(
-        title = "The directory to list"
+        title = "Source listing",
+        description = "Listing definition used to select source objects (files only)"
     )
     @PluginProperty(dynamic = true)
     @NotNull
     private List list;
 
     @Schema(
-        title = "The destination path"
+        title = "Destination object URI",
+        description = "gs:// path for the composed object"
     )
     private Property<String> to;
 
     @Schema(
-        title = "if `true`, don't failed if no result"
+        title = "Allow empty source",
+        description = "If true, succeed with empty sources; otherwise fail when no files are found"
     )
     @PluginProperty
     @Builder.Default
-    private Property<Boolean> allowEmpty = Property.of(false);
+    private Property<Boolean> allowEmpty = Property.ofValue(false);
 
     @Override
     public Output run(RunContext runContext) throws Exception {
@@ -88,9 +118,11 @@ public class Compose extends AbstractGcs implements RunnableTask<Compose.Output>
             .serviceAccount(this.serviceAccount)
             .scopes(this.scopes)
             .from(this.list.getFrom())
-            .filter(Property.of(ListInterface.Filter.FILES))
-            .listingType(this.list.getListingType())
+            .filter(Property.ofValue(ListInterface.Filter.FILES))
+            .listingType(this.list.getListingType() != null ? this.list.getListingType() : Property.ofValue(ListInterface.ListingType.DIRECTORY))
             .regExp(this.list.getRegExp())
+            // we force the GCS Compose API limit (32) instead of the List default (25)
+            .maxFiles(Property.ofValue(GCS_COMPOSE_MAX_SOURCE_OBJECTS))
             .build();
 
         io.kestra.plugin.gcp.gcs.List.Output run = listActions.run(runContext);
@@ -130,10 +162,10 @@ public class Compose extends AbstractGcs implements RunnableTask<Compose.Output>
         private Property<String> from;
 
         @Builder.Default
-        private final Property<io.kestra.plugin.gcp.gcs.List.Filter> filter = Property.of(Filter.BOTH);
+        private final Property<io.kestra.plugin.gcp.gcs.List.Filter> filter = Property.ofValue(Filter.BOTH);
 
         @Builder.Default
-        private final Property<io.kestra.plugin.gcp.gcs.List.ListingType> listingType = Property.of(ListingType.DIRECTORY);
+        private final Property<io.kestra.plugin.gcp.gcs.List.ListingType> listingType = Property.ofValue(ListingType.DIRECTORY);
 
         private Property<String> regExp;
     }

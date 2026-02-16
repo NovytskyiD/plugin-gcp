@@ -1,16 +1,16 @@
 package io.kestra.plugin.gcp.dataproc.batches;
 
 import com.google.common.collect.ImmutableMap;
+import io.kestra.core.junit.annotations.KestraTest;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.runners.RunContext;
 import io.kestra.core.runners.RunContextFactory;
 import io.kestra.core.utils.TestsUtils;
 import io.micronaut.context.annotation.Value;
-import io.kestra.core.junit.annotations.KestraTest;
 import jakarta.inject.Inject;
-import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
 import java.util.List;
 
@@ -19,7 +19,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 
 @KestraTest
-@Slf4j
+@EnabledIfEnvironmentVariable(named = "GOOGLE_APPLICATION_CREDENTIALS", matches = ".+")
 @Disabled
 class SparkSubmitTest {
     @Inject
@@ -35,11 +35,11 @@ class SparkSubmitTest {
             // The example can be retrieved from the Spark site (version Scala 2.13) and must be uploaded to the GCS bucket before running the test
             .id(SparkSubmit.class.getSimpleName())
             .type(SparkSubmit.class.getName())
-            .jarFileUris(Property.of(List.of("gs://spark-jobs-kestra/spark-examples.jar")))
-            .mainClass(Property.of("org.apache.spark.examples.SparkPi"))
-            .args(Property.of(List.of("1000")))
-            .projectId(Property.of(project))
-            .name(Property.of("test-spark"))
+            .jarFileUris(Property.ofValue(List.of("gs://spark-jobs-kestra/spark-examples.jar")))
+            .mainClass(Property.ofValue("org.apache.spark.examples.SparkPi"))
+            .args(Property.ofValue(List.of("1000")))
+            .projectId(Property.ofValue(project))
+            .name(Property.ofValue("test-spark"))
             .build();
 
         RunContext runContext = TestsUtils.mockRunContext(runContextFactory, submit, ImmutableMap.of());

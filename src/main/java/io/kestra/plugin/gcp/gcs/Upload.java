@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
 import io.kestra.core.models.annotations.Example;
+import io.kestra.core.models.annotations.Metric;
 import io.kestra.core.models.annotations.Plugin;
 import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.executions.metrics.Counter;
@@ -61,42 +62,53 @@ import java.nio.ByteBuffer;
                     type: io.kestra.plugin.gcp.gcs.Upload
                     from: "{{ outputs.data.uri }}"
                     to: gs://kestra-demo/data.csv
-            """
+                """
+        )
+    },
+    metrics = {
+        @Metric(
+            name = "file.size",
+            type = Counter.TYPE,
+            unit = "bytes",
+            description = "Size of the uploaded file."
         )
     }
 )
 @Schema(
-    title = "Upload a file to a GCS bucket."
+    title = "Upload a file to GCS",
+    description = "Reads a file from Kestra internal storage and writes it to a gs:// destination. Supports content metadata settings."
 )
 public class Upload extends AbstractGcs implements RunnableTask<Upload.Output> {
     @Schema(
-        title = "The file to copy"
+        title = "Source file URI",
+        description = "Kestra internal storage URI to upload"
     )
     @PluginProperty(internalStorageURI = true)
     private Property<String> from;
 
     @Schema(
-        title = "The destination path"
+        title = "Destination object URI",
+        description = "gs:// bucket/path for the uploaded object"
     )
     private Property<String> to;
 
     @Schema(
-        title = "The blob's data content type."
+        title = "Content-Type"
     )
     private Property<String> contentType;
 
     @Schema(
-        title = "The blob's data content encoding."
+        title = "Content-Encoding"
     )
     private Property<String> contentEncoding;
 
     @Schema(
-        title = "The blob's data content disposition."
+        title = "Content-Disposition"
     )
     private Property<String> contentDisposition;
 
     @Schema(
-        title = "The blob's data cache control."
+        title = "Cache-Control"
     )
     private Property<String> cacheControl;
 

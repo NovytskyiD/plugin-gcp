@@ -6,6 +6,7 @@ import io.micronaut.context.annotation.Value;
 import io.kestra.core.junit.annotations.KestraTest;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
 import java.util.Map;
 
@@ -14,6 +15,7 @@ import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
 
 @KestraTest
+@EnabledIfEnvironmentVariable(named = "GOOGLE_APPLICATION_CREDENTIALS", matches = ".+")
 class DeleteTest {
     @Inject
     private RunContextFactory runContextFactory;
@@ -26,9 +28,9 @@ class DeleteTest {
         var runContext = runContextFactory.of();
 
         var delete = Delete.builder()
-            .projectId(Property.of(project))
-            .collection(Property.of("persons"))
-            .childPath(Property.of("1"))
+            .projectId(Property.ofValue(project))
+            .collection(Property.ofValue("persons"))
+            .childPath(Property.ofValue("1"))
             .build();
 
         // create something to delete

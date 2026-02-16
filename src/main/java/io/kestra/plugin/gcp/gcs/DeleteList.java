@@ -4,6 +4,7 @@ import com.google.cloud.storage.Blob;
 import com.google.cloud.storage.BlobId;
 import com.google.cloud.storage.Storage;
 import io.kestra.core.models.annotations.Example;
+import io.kestra.core.models.annotations.Metric;
 import io.kestra.core.models.annotations.Plugin;
 import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.executions.metrics.Counter;
@@ -46,21 +47,38 @@ import static io.kestra.core.utils.Rethrow.throwConsumer;
                     from: "gs://my_bucket/dir/"
                 """
         )
+    },
+    metrics = {
+        @Metric(
+            name = "count",
+            type = Counter.TYPE,
+            unit = "files",
+            description = "Number of blobs deleted."
+        ),
+        @Metric(
+            name = "size",
+            type = Counter.TYPE,
+            unit = "bytes",
+            description = "Total size of blobs deleted."
+        )
     }
 )
 @Schema(
-    title = "Delete all files from a GCS bucket."
+    title = "Delete multiple GCS objects",
+    description = "Lists objects under a prefix (optional regex) and deletes them in parallel. Can error if no objects match."
 )
 public class DeleteList extends AbstractList implements RunnableTask<DeleteList.Output>, ListInterface {
     @Schema(
-        title = "raise an error if the file is not found"
+        title = "Error when empty",
+        description = "If true, throws when no objects were deleted; default false"
     )
     @Builder.Default
-    private final Property<Boolean> errorOnEmpty = Property.of(false);
+    private final Property<Boolean> errorOnEmpty = Property.ofValue(false);
 
     @Min(2)
     @Schema(
-        title = "Number of concurrent parallel deletions"
+        title = "Concurrent deletions",
+        description = "Number of parallel delete workers; optional"
     )
     @PluginProperty
     private Integer concurrent;
@@ -136,13 +154,13 @@ public class DeleteList extends AbstractList implements RunnableTask<DeleteList.
     public static class Output implements io.kestra.core.models.tasks.Output {
         @Builder.Default
         @Schema(
-            title = "The count of blobs deleted"
+            title = "Deleted count"
         )
         private final long count = 0;
 
         @Builder.Default
         @Schema(
-            title = "The size of all blobs deleted"
+            title = "Deleted size bytes"
         )
         private final long size = 0;
     }

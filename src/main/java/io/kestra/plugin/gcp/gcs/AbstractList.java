@@ -27,12 +27,13 @@ public abstract class AbstractList extends AbstractGcs implements ListInterface 
     protected Property<String> from;
 
     @Schema(
-        title = "If set to `true`, lists all versions of a blob. The default is `false`."
+        title = "Include all versions",
+        description = "If true, includes object versions; default false"
     )
     private Property<Boolean> allVersions;
 
     @Builder.Default
-    private final Property<ListingType> listingType = Property.of(ListingType.DIRECTORY);
+    private final Property<ListingType> listingType = Property.ofValue(ListingType.DIRECTORY);
 
     protected Property<String> regExp;
 

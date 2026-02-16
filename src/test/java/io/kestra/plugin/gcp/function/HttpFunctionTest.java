@@ -8,6 +8,7 @@ import io.kestra.core.runners.RunContextFactory;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
 import java.util.Collections;
 
@@ -15,6 +16,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 
 @KestraTest
+@EnabledIfEnvironmentVariable(named = "GOOGLE_APPLICATION_CREDENTIALS", matches = ".+")
 class HttpFunctionTest {
     private static final String GCP_FUNCTION_TEST_URL = "";
     @Inject
@@ -24,8 +26,8 @@ class HttpFunctionTest {
     @Test
     void testAzureFunctionWithStringOutput() throws Exception {
         HttpFunction httpTrigger = HttpFunction.builder()
-            .url(Property.of(GCP_FUNCTION_TEST_URL + "?firstName=Bryan&name=Smith"))
-            .httpMethod(Property.of("GET"))
+            .url(Property.ofValue(GCP_FUNCTION_TEST_URL + "?firstName=Bryan&name=Smith"))
+            .httpMethod(Property.ofValue("GET"))
             .build();
 
         RunContext runContext = runContextFactory.of(Collections.emptyMap());

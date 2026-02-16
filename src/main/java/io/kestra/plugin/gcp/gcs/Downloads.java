@@ -49,9 +49,14 @@ import static io.kestra.core.utils.Rethrow.throwFunction;
     }
 )
 @Schema(
-    title = "Download multiple files from a GCS bucket."
+    title = "Download multiple GCS objects",
+    description = "Lists objects under a prefix (with optional regex and versioning) then downloads them to Kestra storage. Can MOVE (copy then delete) or DELETE source objects after download."
 )
 public class Downloads extends AbstractGcs implements RunnableTask<Downloads.Output>, ListInterface, ActionInterface {
+    @Schema(
+        title = "Source prefix",
+        description = "gs:// bucket path to list and download from"
+    )
     private Property<String> from;
 
     @Schema(
@@ -60,13 +65,32 @@ public class Downloads extends AbstractGcs implements RunnableTask<Downloads.Out
     private Property<Boolean> allVersions;
 
     @Builder.Default
-    private final Property<List.ListingType> listingType = Property.of(ListingType.DIRECTORY);
+    private final Property<List.ListingType> listingType = Property.ofValue(ListingType.DIRECTORY);
 
+    @Schema(
+        title = "Regex filter",
+        description = "Optional regex applied to object names"
+    )
     private Property<String> regExp;
 
+    @Schema(
+        title = "Post-download action",
+        description = "DELETE or MOVE (copy to moveDirectory then delete source)"
+    )
     private Property<ActionInterface.Action> action;
 
+    @Schema(
+        title = "Move destination",
+        description = "Required when action is MOVE; gs:// prefix for moved objects"
+    )
     private Property<String> moveDirectory;
+
+    @Schema(
+        title = "Max files",
+        description = "Maximum number of files to list and download"
+    )
+    @Builder.Default
+    private Property<Integer> maxFiles = Property.ofValue(25);
 
     static void performAction(
         java.util.List<io.kestra.plugin.gcp.gcs.models.Blob> blobList,
@@ -82,7 +106,7 @@ public class Downloads extends AbstractGcs implements RunnableTask<Downloads.Out
                 Delete delete = Delete.builder()
                     .id("archive")
                     .type(Delete.class.getName())
-                    .uri(Property.of(blob.getUri().toString()))
+                    .uri(Property.ofValue(blob.getUri().toString()))
                     .serviceAccount(serviceAccount)
                     .projectId(projectId)
                     .scopes(scopes)
@@ -94,11 +118,11 @@ public class Downloads extends AbstractGcs implements RunnableTask<Downloads.Out
                 Copy copy = Copy.builder()
                     .id("archive")
                     .type(Copy.class.getName())
-                    .from(Property.of(blob.getUri().toString()))
-                    .to(Property.of(StringUtils.stripEnd(runContext.render(moveDirectory).as(String.class).orElseThrow() + "/", "/")
+                    .from(Property.ofValue(blob.getUri().toString()))
+                    .to(Property.ofValue(StringUtils.stripEnd(runContext.render(moveDirectory).as(String.class).orElseThrow() + "/", "/")
                         + "/" + FilenameUtils.getName(blob.getName())
                     ))
-                    .delete(Property.of(true))
+                    .delete(Property.ofValue(true))
                     .serviceAccount(serviceAccount)
                     .projectId(projectId)
                     .scopes(scopes)
@@ -117,10 +141,11 @@ public class Downloads extends AbstractGcs implements RunnableTask<Downloads.Out
             .serviceAccount(this.serviceAccount)
             .scopes(this.scopes)
             .from(this.from)
-            .filter(Property.of(Filter.FILES))
+            .filter(Property.ofValue(Filter.FILES))
             .listingType(this.listingType)
             .regExp(this.regExp)
             .allVersions(this.allVersions)
+            .maxFiles(this.maxFiles)
             .build();
         List.Output run = task.run(runContext);
 
@@ -166,12 +191,13 @@ public class Downloads extends AbstractGcs implements RunnableTask<Downloads.Out
     @Getter
     public static class Output implements io.kestra.core.models.tasks.Output {
         @Schema(
-            title = "The bucket of the downloaded file"
+            title = "Downloaded objects"
         )
         private final java.util.List<Blob>  blobs;
 
         @Schema(
-            title = "The downloaded files as a map of from/to URIs."
+            title = "Downloaded file map",
+            description = "Map of object names to Kestra storage URIs"
         )
         private final Map<String, URI> outputFiles;
     }

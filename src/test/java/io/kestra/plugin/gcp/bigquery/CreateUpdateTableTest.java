@@ -1,8 +1,9 @@
 package io.kestra.plugin.gcp.bigquery;
 
 import com.devskiller.friendly_id.FriendlyId;
-import com.google.cloud.bigquery.*;
+import com.google.cloud.bigquery.StandardSQLTypeName;
 import com.google.common.collect.ImmutableMap;
+import io.kestra.core.junit.annotations.KestraTest;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.runners.RunContext;
 import io.kestra.core.runners.RunContextFactory;
@@ -11,21 +12,19 @@ import io.kestra.plugin.gcp.bigquery.models.Schema;
 import io.kestra.plugin.gcp.bigquery.models.StandardTableDefinition;
 import io.kestra.plugin.gcp.bigquery.models.TableDefinition;
 import io.micronaut.context.annotation.Value;
-import io.kestra.core.junit.annotations.KestraTest;
-import lombok.extern.slf4j.Slf4j;
+import jakarta.inject.Inject;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
 import java.time.Duration;
 import java.util.Arrays;
-import jakarta.inject.Inject;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.*;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @KestraTest
-@Slf4j
-class CreateUpdateTableTest {
+@EnabledIfEnvironmentVariable(named = "GOOGLE_APPLICATION_CREDENTIALS", matches = ".+")
+public class CreateUpdateTableTest {
     @Inject
     private RunContextFactory runContextFactory;
 
@@ -40,27 +39,27 @@ class CreateUpdateTableTest {
         String friendlyId = FriendlyId.createFriendlyId();
 
         CreateTable task = CreateTable.builder()
-            .projectId(Property.of(this.project))
-            .dataset(Property.of(this.dataset))
-            .table(Property.of(friendlyId))
-            .friendlyName(Property.of("new_table"))
+            .projectId(Property.ofValue(this.project))
+            .dataset(Property.ofValue(this.dataset))
+            .table(Property.ofValue(friendlyId))
+            .friendlyName(Property.ofValue("new_table"))
             .tableDefinition(TableDefinition.builder()
-                .type(Property.of(TableDefinition.Type.TABLE))
+                .type(Property.ofValue(TableDefinition.Type.TABLE))
                 .schema(Schema.builder()
                     .fields(Arrays.asList(
                         Field.builder()
-                            .name(Property.of("id"))
-                            .type(Property.of(StandardSQLTypeName.INT64))
+                            .name(Property.ofValue("id"))
+                            .type(Property.ofValue(StandardSQLTypeName.INT64))
                             .build(),
                         Field.builder()
-                            .name(Property.of("name"))
-                            .type(Property.of(StandardSQLTypeName.STRING))
+                            .name(Property.ofValue("name"))
+                            .type(Property.ofValue(StandardSQLTypeName.STRING))
                             .build()
                     ))
                     .build()
                 )
                 .standardTableDefinition(StandardTableDefinition.builder()
-                    .clustering(Property.of(Arrays.asList("id", "name")))
+                    .clustering(Property.ofValue(Arrays.asList("id", "name")))
                     .build()
                 )
                 .build()
@@ -81,11 +80,11 @@ class CreateUpdateTableTest {
         assertThat(run.getExpirationTime(), notNullValue());
 
         UpdateTable updateTask = UpdateTable.builder()
-            .projectId(Property.of(this.project))
-            .dataset(Property.of(this.dataset))
-            .table(Property.of(friendlyId))
-            .friendlyName(Property.of("new_table_2"))
-            .expirationDuration(Property.of(Duration.ofHours(2)))
+            .projectId(Property.ofValue(this.project))
+            .dataset(Property.ofValue(this.dataset))
+            .table(Property.ofValue(friendlyId))
+            .friendlyName(Property.ofValue("new_table_2"))
+            .expirationDuration(Property.ofValue(Duration.ofHours(2)))
             .build();
 
         UpdateTable.Output updateRun = updateTask.run(runContext);
@@ -99,21 +98,21 @@ class CreateUpdateTableTest {
         String friendlyId = FriendlyId.createFriendlyId();
 
         CreateTable task = CreateTable.builder()
-                .projectId(Property.of(this.project))
-                .dataset(Property.of(this.dataset))
-                .table(Property.of(friendlyId))
-                .friendlyName(Property.of("new_table"))
+                .projectId(Property.ofValue(this.project))
+                .dataset(Property.ofValue(this.dataset))
+                .table(Property.ofValue(friendlyId))
+                .friendlyName(Property.ofValue("new_table"))
                 .tableDefinition(TableDefinition.builder()
-                        .type(Property.of(TableDefinition.Type.TABLE))
+                        .type(Property.ofValue(TableDefinition.Type.TABLE))
                         .schema(Schema.builder()
                                 .fields(Arrays.asList(
                                         Field.builder()
-                                                .name(Property.of("id"))
-                                                .type(Property.of(StandardSQLTypeName.INT64))
+                                                .name(Property.ofValue("id"))
+                                                .type(Property.ofValue(StandardSQLTypeName.INT64))
                                                 .build(),
                                         Field.builder()
-                                                .name(Property.of("name"))
-                                                .type(Property.of(StandardSQLTypeName.STRING))
+                                                .name(Property.ofValue("name"))
+                                                .type(Property.ofValue(StandardSQLTypeName.STRING))
                                                 .build()
                                 ))
                                 .build()

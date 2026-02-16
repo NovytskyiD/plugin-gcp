@@ -7,6 +7,7 @@ import io.kestra.core.models.property.Property;
 import io.kestra.core.runners.RunContext;
 import io.kestra.core.runners.RunContextFactory;
 import io.kestra.core.storages.StorageInterface;
+import io.kestra.core.tenant.TenantService;
 import io.kestra.core.utils.TestsUtils;
 import io.micronaut.context.annotation.Value;
 import io.kestra.core.junit.annotations.KestraTest;
@@ -14,12 +15,17 @@ import org.junit.jupiter.api.Test;
 
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.util.Arrays;
+import java.util.List;
+
 import jakarta.inject.Inject;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.*;
 
 @KestraTest
+@EnabledIfEnvironmentVariable(named = "GOOGLE_APPLICATION_CREDENTIALS", matches = ".+")
 class ComposeTest {
     @Inject
     private GcsTestUtils testUtils;
@@ -45,11 +51,11 @@ class ComposeTest {
             .id(ComposeTest.class.getSimpleName())
             .type(Compose.class.getName())
             .list(Compose.List.builder()
-                .from(Property.of("gs://" +  bucket + "/tasks/gcp/upload/compose-" + dir + "/"))
-                .listingType(Property.of(ListInterface.ListingType.RECURSIVE))
+                .from(Property.ofValue("gs://" +  bucket + "/tasks/gcp/upload/compose-" + dir + "/"))
+                .listingType(Property.ofValue(ListInterface.ListingType.RECURSIVE))
                 .build()
             )
-            .to(Property.of("gs://" +  bucket + "/tasks/gcp/compose-result/compose.txt"))
+            .to(Property.ofValue("gs://" +  bucket + "/tasks/gcp/compose-result/compose.txt"))
             .build();
 
         RunContext runContext = TestsUtils.mockRunContext(this.runContextFactory, task, ImmutableMap.of());
@@ -58,15 +64,50 @@ class ComposeTest {
         Download download = Download.builder()
             .id(DownloadTest.class.getSimpleName())
             .type(Download.class.getName())
-            .from(Property.of(run.getUri().toString()))
+            .from(Property.ofValue(run.getUri().toString()))
             .build();
 
-        InputStream get = storageInterface.get(null, null, download.run(runContext).getUri());
+        InputStream get = storageInterface.get(TenantService.MAIN_TENANT, null, download.run(runContext).getUri());
 
         assertThat(
             CharStreams.toString(new InputStreamReader(get)),
             is("1\n2\n3\n")
         );
 
+    }
+
+    @Test
+    void runWithDefaultListingType() throws Exception {
+        String dir = FriendlyId.createFriendlyId();
+        String basePath = "compose-" + dir + "/";
+
+        testUtils.upload(basePath + FriendlyId.createFriendlyId(), "data/1.txt");
+        testUtils.upload(basePath + FriendlyId.createFriendlyId(), "data/2.txt");
+        testUtils.upload(basePath + FriendlyId.createFriendlyId(), "data/3.txt");
+
+        Compose task = Compose.builder()
+            .id("compose-default-listingType")
+            .type(Compose.class.getName())
+            .list(Compose.List.builder()
+                .from(Property.ofValue("gs://" + bucket + "/tasks/gcp/upload/" + basePath))
+                .build()
+            )
+            .to(Property.ofValue("gs://" + bucket + "/tasks/gcp/compose-result/compose-default.txt"))
+            .build();
+
+        RunContext runContext = TestsUtils.mockRunContext(this.runContextFactory, task, ImmutableMap.of());
+        Compose.Output run = task.run(runContext);
+
+        Download download = Download.builder()
+            .id(DownloadTest.class.getSimpleName())
+            .type(Download.class.getName())
+            .from(Property.ofValue(run.getUri().toString()))
+            .build();
+
+        InputStream get = storageInterface.get(TenantService.MAIN_TENANT, null, download.run(runContext).getUri());
+
+        String result = CharStreams.toString(new InputStreamReader(get));
+        List<String> lines = Arrays.asList(result.split("\\R"));
+        assertThat(lines, containsInAnyOrder("1", "2", "3"));
     }
 }

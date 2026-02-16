@@ -4,6 +4,7 @@ import com.google.cloud.bigquery.*;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.io.CharStreams;
 import io.kestra.core.models.property.Property;
+import io.kestra.core.tenant.TenantService;
 import io.micronaut.context.annotation.Value;
 import io.kestra.core.junit.annotations.KestraTest;
 import org.junit.jupiter.api.Test;
@@ -19,11 +20,13 @@ import java.io.InputStreamReader;
 import java.util.Collections;
 import java.util.UUID;
 import jakarta.inject.Inject;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 
 @KestraTest
+@EnabledIfEnvironmentVariable(named = "GOOGLE_APPLICATION_CREDENTIALS", matches = ".+")
 public class ExtractToGcsTest extends AbstractBigquery {
     @Inject
     private RunContextFactory runContextFactory;
@@ -67,11 +70,11 @@ public class ExtractToGcsTest extends AbstractBigquery {
         ExtractToGcs task = ExtractToGcs.builder()
             .id(ExtractToGcsTest.class.getSimpleName())
             .type(ExtractToGcs.class.getName())
-            .destinationUris(Property.of(Collections.singletonList(
+            .destinationUris(Property.ofValue(Collections.singletonList(
                 "gs://" + this.bucket + "/" + this.filename
             )))
-            .sourceTable(Property.of(this.project + "." + this.dataset + "." + this.table))
-            .printHeader(Property.of(printHeader))
+            .sourceTable(Property.ofValue(this.project + "." + this.dataset + "." + this.table))
+            .printHeader(Property.ofValue(printHeader))
             .build();
 
         RunContext runContext = TestsUtils.mockRunContext(runContextFactory, task, ImmutableMap.of());
@@ -95,11 +98,11 @@ public class ExtractToGcsTest extends AbstractBigquery {
         Download downloadTask = Download.builder()
             .id(ExtractToGcsTest.class.getSimpleName())
             .type(Download.class.getName())
-            .from(Property.of(extractOutput.getDestinationUris().get(0)))
+            .from(Property.ofValue(extractOutput.getDestinationUris().get(0)))
             .build();
 
         Download.Output downloadOutput = downloadTask.run(runContext(downloadTask));
-        InputStream get = storageInterface.get(null, null, downloadOutput.getUri());
+        InputStream get = storageInterface.get(TenantService.MAIN_TENANT, null, downloadOutput.getUri());
 
         // Tests
         assertThat(extractOutput.getFileCounts().get(0), is(1L));

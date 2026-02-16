@@ -4,6 +4,7 @@ import com.devskiller.friendly_id.FriendlyId;
 import com.google.common.collect.ImmutableMap;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.storages.StorageInterface;
+import io.kestra.core.tenant.TenantService;
 import io.kestra.plugin.gcp.gcs.Upload;
 import io.micronaut.context.annotation.Value;
 import io.kestra.core.junit.annotations.KestraTest;
@@ -19,12 +20,14 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Objects;
 import jakarta.inject.Inject;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 
 @KestraTest
-class LoadFromGcsTest {
+@EnabledIfEnvironmentVariable(named = "GOOGLE_APPLICATION_CREDENTIALS", matches = ".+")
+public class LoadFromGcsTest {
     @Inject
     private StorageInterface storageInterface;
 
@@ -48,7 +51,7 @@ class LoadFromGcsTest {
         );
 
         URI put = storageInterface.put(
-            null,
+            TenantService.MAIN_TENANT,
             null,
             new URI("/" + FriendlyId.createFriendlyId()),
             new FileInputStream(applicationFile)
@@ -57,8 +60,8 @@ class LoadFromGcsTest {
         Upload upload = Upload.builder()
             .id(LoadFromGcsTest.class.getSimpleName())
             .type(Upload.class.getName())
-            .from(Property.of(put.toString()))
-            .to(Property.of("gs://" + this.bucket + "/" + FriendlyId.createFriendlyId() + ".json"))
+            .from(Property.ofValue(put.toString()))
+            .to(Property.ofValue("gs://" + this.bucket + "/" + FriendlyId.createFriendlyId() + ".json"))
             .build();
 
         upload.run(TestsUtils.mockRunContext(this.runContextFactory, upload, ImmutableMap.of()));
@@ -66,12 +69,13 @@ class LoadFromGcsTest {
         LoadFromGcs task = LoadFromGcs.builder()
             .id(LoadFromGcsTest.class.getSimpleName())
             .type(LoadFromGcs.class.getName())
-            .from(Property.of(Collections.singletonList(
+            .projectId(Property.ofValue(project))
+            .from(Property.ofValue(Collections.singletonList(
                 upload.getTo().toString()
             )))
-            .destinationTable(Property.of(project + "." + dataset + "." + FriendlyId.createFriendlyId()))
+            .destinationTable(Property.ofValue(project + "." + dataset + "." + FriendlyId.createFriendlyId()))
             .format(AbstractLoad.Format.JSON)
-            .schema(Property.of(ImmutableMap.of(
+            .schema(Property.ofValue(ImmutableMap.of(
                 "fields", Arrays.asList(
                     ImmutableMap.of("name", "name", "type", "STRING"),
                     ImmutableMap.of("name", "post_abbr", "type", "STRING")

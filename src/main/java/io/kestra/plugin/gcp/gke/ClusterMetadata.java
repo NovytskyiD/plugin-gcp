@@ -11,7 +11,6 @@ import lombok.experimental.SuperBuilder;
 import io.kestra.core.exceptions.IllegalVariableEvaluationException;
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
-import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
 import io.kestra.plugin.gcp.AbstractTask;
@@ -46,22 +45,26 @@ import jakarta.validation.constraints.NotNull;
     }
 )
 @Schema(
-    title = "Get a GKE cluster's metadata."
+    title = "Fetch GKE cluster metadata",
+    description = "Retrieves metadata for a GKE cluster in the specified project and zone/region, including networking, auth certs, and node pool statuses."
 )
 public class ClusterMetadata extends AbstractTask implements RunnableTask<ClusterMetadata.Output> {
     @NotNull
     @Schema(
-        title = "Cluster ID whose metadata needs to be fetched."
+        title = "Cluster ID",
+        description = "Name of the cluster to query"
     )
     private Property<String> clusterId;
 
     @Schema(
-        title = "GCP zone in which the GKE cluster is present."
+        title = "Cluster location",
+        description = "Zone or region where the cluster resides"
     )
     private Property<String> clusterZone;
 
     @Schema(
-        title = "GCP project ID where the GKE cluster is present."
+        title = "Cluster project ID",
+        description = "Project that owns the cluster"
     )
     private Property<String> clusterProjectId;
 
@@ -91,9 +94,9 @@ public class ClusterMetadata extends AbstractTask implements RunnableTask<Cluste
                 .collect(Collectors.toList())
             )
             .masterAuth(MasterAuth.builder()
-                .clusterCertificat(cluster.getMasterAuth().getClusterCaCertificate())
+                .clusterCertificate(cluster.getMasterAuth().getClusterCaCertificate())
                 .clientKey(cluster.getMasterAuth().getClientKey())
-                .clientCertificat(cluster.getMasterAuth().getClientCertificate())
+                .clientCertificate(cluster.getMasterAuth().getClientCertificate())
                 .build()
             )
             .loggingService(cluster.getLoggingService())
@@ -108,11 +111,11 @@ public class ClusterMetadata extends AbstractTask implements RunnableTask<Cluste
             .build();
 
         try (ClusterManagerClient client = ClusterManagerClient.create(clusterManagerSettings)) {
-            return client.getCluster(
+            return client.getCluster("projects/%s/locations/%s/clusters/%s".formatted(
                 runContext.render(clusterProjectId).as(String.class).orElse(null),
                 runContext.render(clusterZone).as(String.class).orElse(null),
                 runContext.render(clusterId).as(String.class).orElse(null)
-            );
+            ));
         }
     }
 
@@ -140,9 +143,20 @@ public class ClusterMetadata extends AbstractTask implements RunnableTask<Cluste
     @Builder
     @Getter
     public static class MasterAuth {
-        private final String clusterCertificat;
+        private final String clusterCertificate;
+
+        @Deprecated
+        public String getClusterCertificat() {
+            return clusterCertificate;
+        }
+
         private final String clientKey;
-        private final String clientCertificat;
+        private final String clientCertificate;
+
+        @Deprecated
+        public String getClientCertificat() {
+            return clientCertificate;
+        }
     }
 
     @Builder

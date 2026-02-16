@@ -23,7 +23,8 @@ import java.util.Optional;
 @Getter
 @NoArgsConstructor
 @Schema(
-    title = "Trigger a flow if a periodically executed BigQuery query returns a non-empty result set."
+    title = "Trigger on BigQuery query results",
+    description = "Polls BigQuery every `interval` (default 60s) by running the rendered SQL. Starts a Flow execution when at least one row is returned and exposes query outputs (rows/size). Supports project/service account override and both standard and legacy SQL."
 )
 @Plugin(
     examples = {
@@ -55,18 +56,26 @@ import java.util.Optional;
 )
 @StoreFetchValidation
 public class Trigger extends AbstractTrigger implements PollingTriggerInterface, TriggerOutput<Query.Output>, QueryInterface {
+    @Schema(
+        title = "Polling interval",
+        description = "Duration between query runs; defaults to 60 seconds"
+    )
     @Builder.Default
     private final Duration interval = Duration.ofSeconds(60);
 
     protected Property<String> projectId;
     protected Property<String> serviceAccount;
     @Builder.Default
-    protected Property<java.util.List<String>> scopes = Property.of(Collections.singletonList("https://www.googleapis.com/auth/cloud-platform"));
+    protected Property<java.util.List<String>> scopes = Property.ofValue(Collections.singletonList("https://www.googleapis.com/auth/cloud-platform"));
 
+    @Schema(
+        title = "SQL query",
+        description = "Rendered SQL string executed on each poll"
+    )
     private Property<String> sql;
 
     @Builder.Default
-    private Property<Boolean> legacySql = Property.of(false);
+    private Property<Boolean> legacySql = Property.ofValue(false);
 
     @Builder.Default
     @Deprecated
@@ -81,7 +90,11 @@ public class Trigger extends AbstractTrigger implements PollingTriggerInterface,
     private boolean fetchOne = false;
 
     @Builder.Default
-    private Property<FetchType> fetchType = Property.of(FetchType.NONE);
+    @Schema(
+        title = "Result handling mode",
+        description = "`NONE` by default. Use `FETCH` or `STORE` to expose rows to downstream tasks; supersedes deprecated flags."
+    )
+    private Property<FetchType> fetchType = Property.ofValue(FetchType.NONE);
 
     @Override
     public Optional<Execution> evaluate(ConditionContext conditionContext, TriggerContext context) throws Exception {

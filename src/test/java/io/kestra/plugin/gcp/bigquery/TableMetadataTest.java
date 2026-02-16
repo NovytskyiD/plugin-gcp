@@ -3,18 +3,16 @@ package io.kestra.plugin.gcp.bigquery;
 import com.devskiller.friendly_id.FriendlyId;
 import com.google.cloud.bigquery.*;
 import com.google.common.collect.ImmutableMap;
-import io.kestra.core.models.property.Property;
-import io.micronaut.context.annotation.Value;
 import io.kestra.core.junit.annotations.KestraTest;
-import lombok.extern.slf4j.Slf4j;
-import org.junit.jupiter.api.Test;
+import io.kestra.core.models.property.Property;
 import io.kestra.core.runners.RunContext;
 import io.kestra.core.runners.RunContextFactory;
-
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import io.micronaut.context.annotation.Value;
 import jakarta.inject.Inject;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+
+import java.util.UUID;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
@@ -22,7 +20,7 @@ import static org.hamcrest.Matchers.nullValue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @KestraTest
-@Slf4j
+@EnabledIfEnvironmentVariable(named = "GOOGLE_APPLICATION_CREDENTIALS", matches = ".+")
 class TableMetadataTest {
     @Inject
     private RunContextFactory runContextFactory;
@@ -48,9 +46,9 @@ class TableMetadataTest {
         String friendlyId = FriendlyId.createFriendlyId();
 
         TableMetadata task = TableMetadata.builder()
-            .projectId(Property.of(this.project))
-            .dataset(Property.of(this.dataset))
-            .table(Property.of(friendlyId))
+            .projectId(Property.ofValue(this.project))
+            .dataset(Property.ofValue(this.dataset))
+            .table(Property.ofValue(friendlyId))
             .build();
         RunContext runContext = runContextFactory.of(ImmutableMap.of());
 
@@ -85,9 +83,9 @@ class TableMetadataTest {
         String friendlyId = FriendlyId.createFriendlyId();
 
         TableMetadata task = TableMetadata.builder()
-            .projectId(Property.of(this.project))
-            .dataset(Property.of(this.dataset))
-            .table(Property.of(friendlyId))
+            .projectId(Property.ofValue(this.project))
+            .dataset(Property.ofValue(this.dataset))
+            .table(Property.ofValue(friendlyId))
             .build();
 
         RunContext runContext = runContextFactory.of(ImmutableMap.of());
@@ -121,9 +119,9 @@ class TableMetadataTest {
         String friendlyId = FriendlyId.createFriendlyId();
 
         TableMetadata task = TableMetadata.builder()
-            .projectId(Property.of(this.project))
-            .dataset(Property.of(this.dataset))
-            .table(Property.of(friendlyId))
+            .projectId(Property.ofValue(this.project))
+            .dataset(Property.ofValue(this.dataset))
+            .table(Property.ofValue(friendlyId))
             .build();
 
         // flow is not created
@@ -137,10 +135,10 @@ class TableMetadataTest {
         String friendlyId = FriendlyId.createFriendlyId();
 
         TableMetadata task = TableMetadata.builder()
-            .projectId(Property.of(this.project))
-            .dataset(Property.of(this.dataset))
-            .table(Property.of(friendlyId))
-            .ifNotExists(Property.of(TableMetadata.IfNotExists.SKIP))
+            .projectId(Property.ofValue(this.project))
+            .dataset(Property.ofValue(this.dataset))
+            .table(Property.ofValue(friendlyId))
+            .ifNotExists(Property.ofValue(TableMetadata.IfNotExists.SKIP))
             .build();
 
         TableMetadata.Output run = task.run(runContextFactory.of(ImmutableMap.of()));

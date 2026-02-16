@@ -4,6 +4,7 @@ import com.devskiller.friendly_id.FriendlyId;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.io.CharStreams;
 import io.kestra.core.models.property.Property;
+import io.kestra.core.tenant.TenantService;
 import io.micronaut.context.annotation.Value;
 import io.kestra.core.junit.annotations.KestraTest;
 import org.junit.jupiter.api.Test;
@@ -20,12 +21,14 @@ import java.io.InputStreamReader;
 import java.net.URI;
 import java.util.Objects;
 import jakarta.inject.Inject;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.endsWith;
 import static org.hamcrest.Matchers.is;
 
 @KestraTest
+@EnabledIfEnvironmentVariable(named = "GOOGLE_APPLICATION_CREDENTIALS", matches = ".+")
 class DownloadTest {
     @Inject
     private StorageInterface storageInterface;
@@ -43,7 +46,7 @@ class DownloadTest {
             .toURI());
 
         URI source = storageInterface.put(
-            null,
+            TenantService.MAIN_TENANT,
             null,
             new URI("/" + FriendlyId.createFriendlyId()),
             new FileInputStream(file)
@@ -54,8 +57,8 @@ class DownloadTest {
         Upload upload = Upload.builder()
             .id(UploadTest.class.getSimpleName())
             .type(Upload.class.getName())
-            .from(Property.of(source.toString()))
-            .to(Property.of("gs://{{inputs.bucket}}/tasks/gcp/upload/" + out + ".yml"))
+            .from(Property.ofValue(source.toString()))
+            .to(Property.ofValue("gs://{{inputs.bucket}}/tasks/gcp/upload/" + out + ".yml"))
             .build();
 
         Upload.Output uploadOutput = upload.run(runContext(upload));
@@ -63,14 +66,14 @@ class DownloadTest {
         Download task = Download.builder()
             .id(DownloadTest.class.getSimpleName())
             .type(Download.class.getName())
-            .from(Property.of(uploadOutput.getUri().toString()))
+            .from(Property.ofValue(uploadOutput.getUri().toString()))
             .build();
 
 
         Download.Output run = task.run(runContext(task));
         assertThat(run.getUri().toString(), endsWith(".yml"));
 
-        InputStream get = storageInterface.get(null, null, run.getUri());
+        InputStream get = storageInterface.get(TenantService.MAIN_TENANT, null, run.getUri());
 
         assertThat(
             CharStreams.toString(new InputStreamReader(get)),

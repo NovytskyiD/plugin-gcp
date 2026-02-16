@@ -1,14 +1,12 @@
 package io.kestra.plugin.gcp.pubsub;
 
-import com.google.cloud.pubsub.v1.Publisher;
 import io.kestra.core.models.annotations.Example;
+import io.kestra.core.models.annotations.Metric;
 import io.kestra.core.models.annotations.Plugin;
-import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.executions.metrics.Counter;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
-import io.kestra.core.serializers.FileSerde;
 import io.kestra.core.serializers.JacksonMapper;
 import io.kestra.plugin.gcp.pubsub.model.Message;
 import io.kestra.plugin.gcp.pubsub.model.SerdeType;
@@ -16,13 +14,9 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
 
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.net.URI;
-import java.util.List;
 import jakarta.validation.constraints.NotNull;
-import reactor.core.publisher.Flux;
-import reactor.core.publisher.FluxSink;
+
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static io.kestra.core.utils.Rethrow.throwFunction;
 
@@ -32,7 +26,8 @@ import static io.kestra.core.utils.Rethrow.throwFunction;
 @Getter
 @NoArgsConstructor
 @Schema(
-    title = "Publish a message to a Google Pub/Sub topic."
+    title = "Publish messages to Pub/Sub",
+    description = "Publishes one or more messages to a topic. Supports STRING/JSON/AVRO serde and optional ordering keys."
 )
 @Plugin(
     examples = {
@@ -57,55 +52,53 @@ import static io.kestra.core.utils.Rethrow.throwFunction;
                              testAttribute: KestraTest
                 """
         )
+    },
+    metrics = {
+        @Metric(
+            name = "records",
+            type = Counter.TYPE,
+            unit = "records",
+            description = "Number of records published to the Pub/Sub topic."
+        )
     }
 )
-public class Publish extends AbstractPubSub implements RunnableTask<Publish.Output> {
-    @PluginProperty(dynamic = true)
+public class Publish extends AbstractPubSub implements RunnableTask<Publish.Output>, io.kestra.core.models.property.Data.From {
     @NotNull
     @Schema(
-        title = "The source of the published data.",
-        description = "Can be an internal storage URI, a list of Pub/Sub messages, or a single Pub/Sub message.",
+        title = io.kestra.core.models.property.Data.From.TITLE,
+        description = io.kestra.core.models.property.Data.From.DESCRIPTION,
         anyOf = {String.class, Message[].class, Message.class}
     )
     private Object from;
 
     @Builder.Default
     @NotNull
-    @Schema(title = "The serializer/deserializer to use.")
-    private Property<SerdeType> serdeType = Property.of(SerdeType.STRING);
+    @Schema(
+        title = "Serde type",
+        description = "Serializer/deserializer for message payloads; defaults to STRING"
+    )
+    private Property<SerdeType> serdeType = Property.ofValue(SerdeType.STRING);
 
     @Override
     public Publish.Output run(RunContext runContext) throws Exception {
-        var publisher = this.createPublisher(runContext);
-        Integer count = 1;
-        Flux<Message> flowable;
-        Flux<Integer> resultFlowable;
+        boolean hasOrderingKeys = checkForOrderingKeys(runContext);
 
-        if (this.from instanceof String) {
-            URI from = new URI(runContext.render((String) this.from));
-            if(!from.getScheme().equals("kestra")) {
-                throw new Exception("Invalid from parameter, must be a Kestra internal storage URI");
-            }
+        var publisher = this.createPublisher(
+            AbstractPubSub.PublisherOptions.builder()
+                .runContext(runContext)
+                .enableMessageOrdering(hasOrderingKeys)
+                .build()
+        );
 
-            try (BufferedReader inputStream = new BufferedReader(new InputStreamReader(runContext.storage().getFile(from)))) {
-                flowable = FileSerde.readAll(inputStream, Message.class);
-                resultFlowable = this.buildFlowable(flowable, publisher, runContext);
-
-                count = resultFlowable.reduce(Integer::sum).blockOptional().orElse(0);
-            }
-
-        } else if (this.from instanceof List) {
-            flowable = Flux
-                .fromArray(((List<Object>) this.from).toArray())
-                .map(o -> JacksonMapper.toMap(o, Message.class));
-
-            resultFlowable = this.buildFlowable(flowable, publisher, runContext);
-
-            count = resultFlowable.reduce(Integer::sum).blockOptional().orElse(0);
-        } else {
-            var msg = JacksonMapper.toMap(this.from, Message.class);
-            publisher.publish(msg.to(runContext, runContext.render(this.serdeType).as(SerdeType.class).orElseThrow()));
-        }
+        Integer count = io.kestra.core.models.property.Data.from(from)
+            .readAs(runContext, Message.class, map -> JacksonMapper.toMap(map, Message.class))
+            .map(throwFunction(message -> {
+                publisher.publish(message.to(runContext, runContext.render(this.serdeType).as(SerdeType.class).orElseThrow()));
+                return 1;
+            }))
+            .reduce(Integer::sum)
+            .blockOptional()
+            .orElse(0);
 
         publisher.shutdown();
 
@@ -117,18 +110,23 @@ public class Publish extends AbstractPubSub implements RunnableTask<Publish.Outp
         .build();
     }
 
-    private Flux<Integer> buildFlowable(Flux<Message> flowable, Publisher publisher, RunContext runContext) throws Exception {
-        return flowable
-            .map(throwFunction(message -> {
-                publisher.publish(message.to(runContext, runContext.render(this.serdeType).as(SerdeType.class).orElseThrow()));
-                return 1;
-            }));
+    private boolean checkForOrderingKeys(RunContext runContext) {
+        try {
+            return io.kestra.core.models.property.Data.from(from)
+                .readAs(runContext, Message.class, map -> JacksonMapper.toMap(map, Message.class))
+                .any(message -> message.getOrderingKey() != null && !message.getOrderingKey().trim().isEmpty())
+                .blockOptional()
+                .orElse(false);
+        } catch (Exception e) {
+            runContext.logger().info("Failed to parse messages while checking for ordering keys. ",e);
+            return false;
+        }
     }
 
     @Builder
     @Getter
     public static class Output implements io.kestra.core.models.tasks.Output {
-        @Schema(title = "Number of published messages.")
+        @Schema(title = "Published message count")
         private final Integer messagesCount;
     }
 }

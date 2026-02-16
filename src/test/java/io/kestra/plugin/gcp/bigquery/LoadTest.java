@@ -3,6 +3,7 @@ package io.kestra.plugin.gcp.bigquery;
 import com.devskiller.friendly_id.FriendlyId;
 import com.google.common.collect.ImmutableMap;
 import io.kestra.core.models.property.Property;
+import io.kestra.core.tenant.TenantService;
 import io.micronaut.context.annotation.Value;
 import io.kestra.core.junit.annotations.KestraTest;
 import org.apache.commons.io.IOUtils;
@@ -18,6 +19,7 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 import jakarta.inject.Inject;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsString;
@@ -25,6 +27,7 @@ import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @KestraTest
+@EnabledIfEnvironmentVariable(named = "GOOGLE_APPLICATION_CREDENTIALS", matches = ".+")
 class LoadTest {
     @Inject
     private StorageInterface storageInterface;
@@ -41,7 +44,7 @@ class LoadTest {
     @Test
     void fromCsv() throws Exception {
         URI source = storageInterface.put(
-            null,
+            TenantService.MAIN_TENANT,
             null,
             new URI("/" + FriendlyId.createFriendlyId()),
             new FileInputStream(new File(Objects.requireNonNull(LoadTest.class.getClassLoader()
@@ -52,13 +55,14 @@ class LoadTest {
         Load task = Load.builder()
             .id(LoadTest.class.getSimpleName())
             .type(Load.class.getName())
-            .from(Property.of(source.toString()))
-            .destinationTable(Property.of(project + "." + dataset + "." + FriendlyId.createFriendlyId()))
+            .projectId(Property.ofValue(project))
+            .from(Property.ofValue(source.toString()))
+            .destinationTable(Property.ofValue(project + "." + dataset + "." + FriendlyId.createFriendlyId()))
             .format(AbstractLoad.Format.CSV)
-            .autodetect(Property.of(true))
+            .autodetect(Property.ofValue(true))
             .csvOptions(AbstractLoad.CsvOptions.builder()
-                .fieldDelimiter(Property.of("|"))
-                .allowJaggedRows(Property.of(true))
+                .fieldDelimiter(Property.ofValue("|"))
+                .allowJaggedRows(Property.ofValue(true))
                 .build()
             )
             .build();
@@ -73,7 +77,7 @@ class LoadTest {
     @Test
     void fromAvro() throws Exception {
         URI source = storageInterface.put(
-            null,
+            TenantService.MAIN_TENANT,
             null,
             new URI("/" + FriendlyId.createFriendlyId()),
             new FileInputStream(new File(Objects.requireNonNull(LoadTest.class.getClassLoader()
@@ -84,11 +88,12 @@ class LoadTest {
         Load task = Load.builder()
             .id(LoadTest.class.getSimpleName())
             .type(Load.class.getName())
-            .from(Property.of(source.toString()))
-            .destinationTable(Property.of(project + "." + dataset + "." + FriendlyId.createFriendlyId()))
+            .projectId(Property.ofValue(project))
+            .from(Property.ofValue(source.toString()))
+            .destinationTable(Property.ofValue(project + "." + dataset + "." + FriendlyId.createFriendlyId()))
             .format(AbstractLoad.Format.AVRO)
             .avroOptions(AbstractLoad.AvroOptions.builder()
-                .useAvroLogicalTypes(Property.of(true))
+                .useAvroLogicalTypes(Property.ofValue(true))
                 .build()
             )
             .build();
@@ -103,7 +108,7 @@ class LoadTest {
     @Test
     void fromEmpty() throws Exception {
         URI source = storageInterface.put(
-            null,
+            TenantService.MAIN_TENANT,
             null,
             new URI("/" + FriendlyId.createFriendlyId()),
             IOUtils.toInputStream("", StandardCharsets.UTF_8)
@@ -112,13 +117,14 @@ class LoadTest {
         Load.LoadBuilder<?, ?> task = Load.builder()
             .id(LoadTest.class.getSimpleName())
             .type(Load.class.getName())
-            .from(Property.of(source.toString()))
-            .destinationTable(Property.of(project + "." + dataset + "." + FriendlyId.createFriendlyId()))
+            .projectId(Property.ofValue(project))
+            .from(Property.ofValue(source.toString()))
+            .destinationTable(Property.ofValue(project + "." + dataset + "." + FriendlyId.createFriendlyId()))
             .format(AbstractLoad.Format.CSV)
-            .autodetect(Property.of(true))
+            .autodetect(Property.ofValue(true))
             .csvOptions(AbstractLoad.CsvOptions.builder()
-                .fieldDelimiter(Property.of("|"))
-                .allowJaggedRows(Property.of(true))
+                .fieldDelimiter(Property.ofValue("|"))
+                .allowJaggedRows(Property.ofValue(true))
                 .build()
             );
 
@@ -127,7 +133,7 @@ class LoadTest {
         Exception exception = assertThrows(Exception.class, () -> task.build().run(runContext));
         assertThat(exception.getMessage(), containsString("Can't load an empty file"));
 
-        AbstractLoad.Output run = task.failedOnEmpty(Property.of(false)).build().run(runContext);
+        AbstractLoad.Output run = task.failedOnEmpty(Property.ofValue(false)).build().run(runContext);
         assertThat(run.getRows(), is(0L));
     }
 }

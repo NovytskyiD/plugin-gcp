@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
 import io.kestra.core.models.annotations.Example;
+import io.kestra.core.models.annotations.Metric;
 import io.kestra.core.models.annotations.Plugin;
 import io.kestra.core.models.executions.metrics.Counter;
 import io.kestra.core.models.tasks.RunnableTask;
@@ -16,6 +17,7 @@ import org.slf4j.Logger;
 
 import java.net.URI;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
 @SuperBuilder
@@ -26,7 +28,7 @@ import java.util.stream.StreamSupport;
 @Plugin(
     examples = {
         @Example(
-            title = "List files in a bucket",
+            title = "List files in a GCS bucket",
             full = true,
             code = """
                 id: gcp_gcs_list
@@ -38,17 +40,36 @@ import java.util.stream.StreamSupport;
                     from: "gs://my_bucket/dir/"
                 """
         )
+    },
+    metrics = {
+        @Metric(
+            name = "size",
+            type = Counter.TYPE,
+            unit = "files",
+            description = "Number of blobs listed."
+        )
     }
 )
 @Schema(
-    title = "List files from a GCS bucket."
+    title = "List GCS objects",
+    description = "Lists blobs under a gs:// prefix with optional regex filtering and directory/file selection."
 )
 public class List extends AbstractList implements RunnableTask<List.Output>, ListInterface {
     @Schema(
-        title = "The filter files or directory"
+        title = "Listing filter",
+        description = "Choose FILES, DIRECTORY, or BOTH; defaults to BOTH"
     )
     @Builder.Default
-    protected final Property<Filter> filter = Property.of(Filter.BOTH);
+    protected final Property<Filter> filter = Property.ofValue(Filter.BOTH);
+
+    @Schema(
+        title = "Max files",
+        description = """
+            The maximum number of files to retrieve at once. Defaults to 25.
+            """
+    )
+    @Builder.Default
+    private Property<Integer> maxFiles = Property.ofValue(25);
 
     @Override
     public Output run(RunContext runContext) throws Exception {
@@ -57,18 +78,32 @@ public class List extends AbstractList implements RunnableTask<List.Output>, Lis
 
         URI from = encode(runContext, runContext.render(this.from).as(String.class).orElse(null));
         String regExp = runContext.render(this.regExp).as(String.class).orElse(null);
+        int rMaxFiles = runContext.render(this.maxFiles).as(Integer.class).orElse(25);
 
         java.util.List<Blob> blobs = StreamSupport
             .stream(this.iterator(connection, from, runContext), false)
             .filter(blob -> {
                 try {
-                    return this.filter(blob, regExp, runContext.render(this.filter).as(Filter.class).orElseThrow());
+                    return this.filter(
+                        blob,
+                        regExp,
+                        runContext.render(this.filter).as(Filter.class).orElseThrow()
+                    );
                 } catch (IllegalVariableEvaluationException e) {
                     throw new RuntimeException(e);
                 }
             })
+            .limit(rMaxFiles + 1L)
             .map(Blob::of)
             .collect(Collectors.toList());
+
+        if (blobs.size() > rMaxFiles) {
+            logger.warn(
+                "Results for '{}' exceeded the maxFiles limit ({}); remaining items were skipped.", from, rMaxFiles
+            );
+
+            blobs = blobs.subList(0, rMaxFiles);
+        }
 
         runContext.metric(Counter.of("size", blobs.size()));
 
@@ -81,10 +116,15 @@ public class List extends AbstractList implements RunnableTask<List.Output>, Lis
     }
 
     protected boolean filter(com.google.cloud.storage.Blob blob, String regExp, Filter filter) {
-        boolean b = filter == Filter.DIRECTORY ? blob.isDirectory() :
-            (filter != Filter.FILES || !blob.isDirectory());
+        var isDir = blob.isDirectory() || blob.getName().endsWith("/");
 
-        if (!b) {
+        var typeMatch = switch (filter) {
+            case DIRECTORY -> isDir;
+            case FILES     -> !isDir;
+            case BOTH      -> true;
+        };
+
+        if (!typeMatch) {
             return false;
         }
 
@@ -95,7 +135,7 @@ public class List extends AbstractList implements RunnableTask<List.Output>, Lis
     @Getter
     public static class Output implements io.kestra.core.models.tasks.Output {
         @Schema(
-            title = "The list of blobs"
+            title = "Blobs"
         )
         private final java.util.List<Blob> blobs;
     }

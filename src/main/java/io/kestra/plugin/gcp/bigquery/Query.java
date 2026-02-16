@@ -109,15 +109,20 @@ import java.util.stream.StreamSupport;
     }
 )
 @Schema(
-    title = "Run a SQL query in a specific BigQuery database."
+    title = "Execute a BigQuery SQL job",
+    description = "Runs a SQL statement with standard SQL by default, optionally writing into a destination table. Supports cache usage, priority selection, schema updates, and deprecated fetch/store outputs (superseded by `fetchType`). Uses task-level project, service account, and scopes."
 )
 @StoreFetchValidation
 @StoreFetchDestinationValidation
 public class Query extends AbstractJob implements RunnableTask<Query.Output>, QueryInterface {
+    @Schema(
+        title = "SQL query",
+        description = "Rendered SQL string to execute; uses standard SQL unless `legacySql` is true"
+    )
     private Property<String> sql;
 
     @Builder.Default
-    private Property<Boolean> legacySql = Property.of(false);
+    private Property<Boolean> legacySql = Property.ofValue(false);
 
     @Builder.Default
     @Deprecated
@@ -132,7 +137,11 @@ public class Query extends AbstractJob implements RunnableTask<Query.Output>, Qu
     private boolean fetchOne = false;
 
     @Builder.Default
-    private Property<FetchType> fetchType = Property.of(FetchType.NONE);
+    @Schema(
+        title = "Result handling mode",
+        description = "`NONE` by default. Use `FETCH` or `STORE` to make results available to downstream tasks; prefer over deprecated `fetch`/`store` flags."
+    )
+    private Property<FetchType> fetchType = Property.ofValue(FetchType.NONE);
 
     // private List<String> positionalParameters;
 
@@ -164,7 +173,7 @@ public class Query extends AbstractJob implements RunnableTask<Query.Output>, Qu
         title = "The time partitioning type specification."
     )
     @Builder.Default
-    private Property<TimePartitioning.Type> timePartitioningType = Property.of(TimePartitioning.Type.DAY);
+    private Property<TimePartitioning.Type> timePartitioningType = Property.ofValue(TimePartitioning.Type.DAY);
 
     @Schema(
         title = "Range partitioning field for the destination table."
@@ -193,10 +202,11 @@ public class Query extends AbstractJob implements RunnableTask<Query.Output>, Qu
     private Property<String> defaultDataset;
 
     @Schema(
-        title = "Sets a priority for the query."
+        title = "Query priority",
+        description = "INTERACTIVE by default; choose BATCH to queue if slots are unavailable"
     )
     @Builder.Default
-    private Property<QueryJobConfiguration.Priority> priority = Property.of(QueryJobConfiguration.Priority.INTERACTIVE);
+    private Property<QueryJobConfiguration.Priority> priority = Property.ofValue(QueryJobConfiguration.Priority.INTERACTIVE);
 
     @Schema(
         title = "Sets whether the job is enabled to create arbitrarily large results.",
@@ -217,7 +227,7 @@ public class Query extends AbstractJob implements RunnableTask<Query.Output>, Qu
         description = "If set to `false`, allowLargeResults must be `true`."
     )
     @Builder.Default
-    private Property<Boolean> flattenResults = Property.of(true);
+    private Property<Boolean> flattenResults = Property.ofValue(true);
 
     @Schema(
         title = "Sets whether to use BigQuery's legacy SQL dialect for this query.",
@@ -225,7 +235,7 @@ public class Query extends AbstractJob implements RunnableTask<Query.Output>, Qu
             "while an invalid query will return the same error it would if it wasn't a dry run."
     )
     @Builder.Default
-    private Property<Boolean> useLegacySql = Property.of(false);
+    private Property<Boolean> useLegacySql = Property.ofValue(false);
 
     @Schema(
         title = "Limits the billing tier for this job.",
@@ -547,7 +557,9 @@ public class Query extends AbstractJob implements RunnableTask<Query.Output>, Qu
             runContext.metric(Counter.of("cache.hit", stats.getCacheHit() ? 1 : 0, tags));
         }
 
-        runContext.metric(Timer.of("duration", Duration.ofMillis(stats.getEndTime() - stats.getStartTime()), tags));
+        if (stats.getStartTime() != null && stats.getEndTime() != null) {
+            runContext.metric(Timer.of("duration", Duration.ofMillis(stats.getEndTime() - stats.getStartTime()), tags));
+        }
     }
 
     private List<Map<String, Object>> fetchResult(TableResult result) {
@@ -629,7 +641,8 @@ public class Query extends AbstractJob implements RunnableTask<Query.Output>, Qu
         }
 
         if (LegacySQLTypeName.DATETIME.equals(field.getType())) {
-            return Instant.parse(value.getStringValue() + "Z");
+            Instant.parse(value.getStringValue() + "Z");
+            return value.getStringValue() + "Z";
         }
 
         if (LegacySQLTypeName.FLOAT.equals(field.getType())) {

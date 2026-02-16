@@ -2,16 +2,19 @@ package io.kestra.plugin.gcp.bigquery;
 
 import com.devskiller.friendly_id.FriendlyId;
 import com.google.common.collect.ImmutableMap;
+import io.kestra.core.junit.annotations.KestraTest;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.runners.RunContext;
 import io.kestra.core.runners.RunContextFactory;
 import io.kestra.core.serializers.FileSerde;
 import io.kestra.core.storages.StorageInterface;
+import io.kestra.core.tenant.TenantService;
 import io.kestra.core.utils.IdUtils;
 import io.kestra.core.utils.TestsUtils;
 import io.micronaut.context.annotation.Value;
-import io.kestra.core.junit.annotations.KestraTest;
+import jakarta.inject.Inject;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -24,12 +27,12 @@ import java.time.ZonedDateTime;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
-import jakarta.inject.Inject;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 
 @KestraTest
+@EnabledIfEnvironmentVariable(named = "GOOGLE_APPLICATION_CREDENTIALS", matches = ".+")
 class StorageWriteTest {
     @Inject
     private RunContextFactory runContextFactory;
@@ -50,7 +53,8 @@ class StorageWriteTest {
         Query create = Query.builder()
             .id(QueryTest.class.getSimpleName())
             .type(Query.class.getName())
-            .sql(Property.of("CREATE TABLE " + table + " AS " + "SELECT \n" +
+            .projectId(Property.ofValue(project))
+            .sql(Property.ofValue("CREATE TABLE " + table + " AS " + "SELECT \n" +
                 "  \"hello\" as string,\n" +
                 "  CAST(NULL AS INT) AS `nullable`,\n" +
                 "  TRUE AS `bool`,\n" +
@@ -86,7 +90,7 @@ class StorageWriteTest {
         }
 
         URI put = storageInterface.put(
-            null,
+            TenantService.MAIN_TENANT,
             null,
             new URI("/" + IdUtils.create() + ".ion"),
             new FileInputStream(tempFile)
@@ -95,16 +99,15 @@ class StorageWriteTest {
         StorageWrite task = StorageWrite.builder()
             .id("test-unit")
             .type(StorageWrite.class.getName())
-            .destinationTable(Property.of(table))
-            .location(Property.of("EU"))
-            .from(Property.of(put.toString()))
+            .projectId(Property.ofValue(project))
+            .destinationTable(Property.ofValue(table))
+            .location(Property.ofValue("EU"))
+            .from(Property.ofValue(put.toString()))
             .build();
 
         RunContext runContext = TestsUtils.mockRunContext(runContextFactory, task, ImmutableMap.of());
         StorageWrite.Output run = task.run(runContext);
 
-
-//        assertThat(run.getRowsCount(), is(1));
         assertThat(run.getRows(), is(1));
     }
 }

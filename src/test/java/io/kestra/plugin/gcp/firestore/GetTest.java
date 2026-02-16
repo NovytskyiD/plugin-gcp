@@ -6,6 +6,7 @@ import io.micronaut.context.annotation.Value;
 import io.kestra.core.junit.annotations.KestraTest;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
 import java.util.Map;
 
@@ -13,6 +14,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.*;
 
 @KestraTest
+@EnabledIfEnvironmentVariable(named = "GOOGLE_APPLICATION_CREDENTIALS", matches = ".+")
 class GetTest {
     @Inject
     private RunContextFactory runContextFactory;
@@ -25,9 +27,9 @@ class GetTest {
         var runContext = runContextFactory.of();
 
         var get = Get.builder()
-            .projectId(Property.of(project))
-            .collection(Property.of("persons"))
-            .childPath(Property.of("1"))
+            .projectId(Property.ofValue(project))
+            .collection(Property.ofValue("persons"))
+            .childPath(Property.ofValue("1"))
             .build();
 
         // create something to get

@@ -4,8 +4,10 @@ import com.google.cloud.vertexai.VertexAI;
 import com.google.cloud.vertexai.api.GenerateContentResponse;
 import com.google.cloud.vertexai.generativeai.ContentMaker;
 import io.kestra.core.models.annotations.Example;
+import io.kestra.core.models.annotations.Metric;
 import io.kestra.core.models.annotations.Plugin;
 import io.kestra.core.models.annotations.PluginProperty;
+import io.kestra.core.models.executions.metrics.Counter;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
@@ -31,8 +33,8 @@ import static io.kestra.core.utils.Rethrow.throwFunction;
 @Getter
 @NoArgsConstructor
 @Schema(
-    title = "Complete a chat using the Vertex AI for Google's Gemini LLM.",
-    description = "See [Generative AI quickstart using the Vertex AI API](https://cloud.google.com/vertex-ai/docs/generative-ai/start/quickstarts/api-quickstart) for more information."
+    title = "Generate chat completions with Vertex AI",
+    description = "Produces chat-style responses using the configured Vertex model and generation parameters."
 )
 @Plugin(
     examples = {
@@ -54,10 +56,32 @@ import static io.kestra.core.utils.Rethrow.throwFunction;
                         content: Please tell me a joke
                 """
         )
+    },
+    metrics = {
+        @Metric(
+            name = "candidate.token.count",
+            type = Counter.TYPE,
+            description = "Number of tokens in the candidate response."
+        ),
+        @Metric(
+            name = "prompt.token.count",
+            type = Counter.TYPE,
+            description = "Number of tokens in the prompt."
+        ),
+        @Metric(
+            name = "total.token.count",
+            type = Counter.TYPE,
+            description = "Total number of tokens (prompt + candidate)."
+        ),
+        @Metric(
+            name = "serialized.size",
+            type = Counter.TYPE,
+            unit = "bytes",
+            description = "Size of the serialized metadata."
+        )
     }
 )
 public class ChatCompletion extends AbstractGenerativeAi implements RunnableTask<ChatCompletion.Output> {
-    private static final String MODEL_ID = "gemini-pro";
 
     @PluginProperty(dynamic = true)
     @Schema(
@@ -92,9 +116,10 @@ public class ChatCompletion extends AbstractGenerativeAi implements RunnableTask
     public Output run(RunContext runContext) throws Exception {
         String projectId = runContext.render(this.getProjectId()).as(String.class).orElse(null);
         String region = runContext.render(this.getRegion()).as(String.class).orElseThrow();
+        String modelId = runContext.render(this.getModelId()).as(String.class).orElseThrow();
 
         try (VertexAI vertexAI = new VertexAI.Builder().setProjectId(projectId).setLocation(region).setCredentials(this.credentials(runContext)).build()) {
-            var model = buildModel(MODEL_ID, vertexAI);
+            var model = buildModel(modelId, vertexAI);
             var chatSession = model.startChat();
 
             if (history != null) {

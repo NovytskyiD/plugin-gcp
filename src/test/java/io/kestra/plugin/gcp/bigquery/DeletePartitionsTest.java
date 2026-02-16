@@ -9,6 +9,7 @@ import io.kestra.core.utils.TestsUtils;
 import io.micronaut.context.annotation.Value;
 import io.kestra.core.junit.annotations.KestraTest;
 import jakarta.inject.Inject;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -19,6 +20,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 
 @KestraTest
+@EnabledIfEnvironmentVariable(named = "GOOGLE_APPLICATION_CREDENTIALS", matches = ".+")
 class DeletePartitionsTest {
     @Inject
     private RunContextFactory runContextFactory;
@@ -123,7 +125,8 @@ class DeletePartitionsTest {
         Query create = Query.builder()
             .id(QueryTest.class.getSimpleName())
             .type(Query.class.getName())
-            .sql(Property.of("CREATE TABLE `" + project + "." + dataset + "." + table + "` (transaction_id INT64, transaction_date DATETIME)\n" +
+            .projectId(Property.ofValue(project))
+            .sql(Property.ofValue("CREATE TABLE `" + project + "." + dataset + "." + table + "` (transaction_id INT64, transaction_date DATETIME)\n" +
                 "PARTITION BY " + partition + "\n" +
                 "AS " + insert
             ))
@@ -135,12 +138,12 @@ class DeletePartitionsTest {
         DeletePartitions task = DeletePartitions.builder()
             .id(QueryTest.class.getSimpleName())
             .type(DeleteTable.class.getName())
-            .projectId(Property.of(this.project))
-            .dataset(Property.of(this.dataset))
-            .partitionType(Property.of(partitionType))
-            .table(Property.of(table))
-            .from(Property.of(from))
-            .to(Property.of(to))
+            .projectId(Property.ofValue(this.project))
+            .dataset(Property.ofValue(this.dataset))
+            .partitionType(Property.ofValue(partitionType))
+            .table(Property.ofValue(table))
+            .from(Property.ofValue(from))
+            .to(Property.ofValue(to))
             .build();
         runContext = TestsUtils.mockRunContext(runContextFactory, task, ImmutableMap.of());
         DeletePartitions.Output run = task.run(runContext);
@@ -150,8 +153,9 @@ class DeletePartitionsTest {
         Query query = Query.builder()
             .id(QueryTest.class.getSimpleName())
             .type(Query.class.getName())
+            .projectId(Property.ofValue(project))
             .fetchOne(true)
-            .sql(Property.of("SELECT COUNT(*) as cnt FROM `" + project + "." + dataset + "." + table + "`;"))
+            .sql(Property.ofValue("SELECT COUNT(*) as cnt FROM `" + project + "." + dataset + "." + table + "`;"))
             .build();
         runContext = TestsUtils.mockRunContext(runContextFactory, query, ImmutableMap.of());
         Query.Output queryRun = query.run(runContext);
